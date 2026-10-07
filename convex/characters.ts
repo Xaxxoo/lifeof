@@ -1,8 +1,23 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { decayNeeds, startingNeeds } from "@nyl/game-core";
-import { ORIGIN_CASH_BONUS, ORIGIN_IDS, SHIRT_COLORS, SKIN_TONES, STATUSES, TRAIT_IDS } from "@nyl/content";
+import { emptySkills, rentPeriodKey, startingNeeds } from "@nyl/game-core";
+import {
+  BASEMENT_STARTER,
+  HAIR_COLORS,
+  HAIR_STYLE_IDS,
+  HOME_RENT_PER_WEEK,
+  ORIGIN_CASH_BONUS,
+  ORIGIN_IDS,
+  PANTS_COLORS,
+  SHIRT_COLORS,
+  SKIN_TONES,
+  STATUSES,
+  STREET_ID,
+  TRAIT_IDS,
+  homeRoomId,
+} from "@nyl/content";
 import { characterByToken } from "./lib";
+import { look } from "./schema";
 
 export const me = query({
   args: { token: v.string() },
@@ -11,6 +26,10 @@ export const me = query({
   },
 });
 
+const oneOf = (list: readonly string[], value: string, what: string) => {
+  if (!list.includes(value)) throw new Error(`Unknown ${what}`);
+};
+
 export const create = mutation({
   args: {
     token: v.string(),
@@ -18,16 +37,19 @@ export const create = mutation({
     origin: v.string(),
     status: v.string(),
     trait: v.string(),
-    look: v.object({ skin: v.string(), shirt: v.string() }),
+    look,
   },
   handler: async (ctx, args) => {
     const name = args.name.trim();
     if (name.length < 2 || name.length > 20) throw new Error("Name must be 2–20 characters");
     if (args.token.length < 16) throw new Error("Bad session token");
-    if (!(ORIGIN_IDS as readonly string[]).includes(args.origin)) throw new Error("Unknown origin");
-    if (!(TRAIT_IDS as readonly string[]).includes(args.trait)) throw new Error("Unknown trait");
-    if (!(SKIN_TONES as readonly string[]).includes(args.look.skin)) throw new Error("Unknown skin tone");
-    if (!(SHIRT_COLORS as readonly string[]).includes(args.look.shirt)) throw new Error("Unknown shirt color");
+    oneOf(ORIGIN_IDS, args.origin, "origin");
+    oneOf(TRAIT_IDS, args.trait, "trait");
+    oneOf(SKIN_TONES, args.look.skin, "skin tone");
+    oneOf(SHIRT_COLORS, args.look.shirt, "shirt color");
+    oneOf(PANTS_COLORS, args.look.pants, "pants color");
+    oneOf(HAIR_STYLE_IDS, args.look.hair, "hairstyle");
+    oneOf(HAIR_COLORS, args.look.hairColor, "hair color");
     const status = STATUSES.find((s) => s.id === args.status);
     if (!status) throw new Error("Unknown status");
 
@@ -35,7 +57,6 @@ export const create = mutation({
     if (existing) return existing._id;
 
     const now = Date.now();
-    const cash = status.startingCash + (ORIGIN_CASH_BONUS[args.origin] ?? 0);
     const id = await ctx.db.insert("characters", {
       token: args.token,
       name,
@@ -43,24 +64,34 @@ export const create = mutation({
       status: args.status,
       trait: args.trait,
       look: args.look,
-      cash,
+      cash: 0,
       needs: startingNeeds(),
       needsUpdatedAt: now,
       lastSeenAt: now,
+      skills: emptySkills(),
+      moodlets: [],
+      roomId: STREET_ID,
+      shiftWeek: { period: rentPeriodKey(now), count: 0 },
+      // First rent is due at the next Sunday 8 PM, not immediately.
+      rent: { perWeek: HOME_RENT_PER_WEEK, lastPeriod: rentPeriodKey(now), owed: 0, missedWeeks: 0 },
     });
+
+    const cash = status.startingCash + (ORIGIN_CASH_BONUS[args.origin] ?? 0);
+    const balanceAfter = cash;
     await ctx.db.insert("ledger", {
       characterId: id,
       delta: cash,
-      balanceAfter: cash,
+      balanceAfter,
       reason: "arrival:savings",
+      label: "Savings you arrived with",
       requestId: `arrival:${id}`,
     });
+    await ctx.db.patch(id, { cash: balanceAfter });
+
+    // Tier 1 housing: a furnished basement room is waiting.
+    for (const s of BASEMENT_STARTER) {
+      await ctx.db.insert("objects", { roomId: homeRoomId(id), itemId: s.itemId, x: s.x, y: s.y, rot: s.rot, paid: 0 });
+    }
     return id;
   },
 });
-
-/** Settle needs decay into storage. Called on join so offline time uses the autopilot floor. */
-export function settledNeeds(c: { needs: Parameters<typeof decayNeeds>[0]; needsUpdatedAt: number; lastSeenAt: number }, now: number) {
-  const offlineGap = now - c.lastSeenAt > 2 * 60_000;
-  return decayNeeds(c.needs, c.needsUpdatedAt, now, { offline: offlineGap });
-}

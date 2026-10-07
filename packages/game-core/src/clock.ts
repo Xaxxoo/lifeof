@@ -11,6 +11,29 @@ export interface NycTime {
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+/** Calendar date in New York as YYYY-MM-DD. */
+export function nycDateKey(now: number = Date.now()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: NYC_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(
+    new Date(now),
+  );
+}
+
+/** Rent is due every Sunday at 8 PM New York time (PRD §5). */
+export const RENT_DUE = { weekday: 0, hour: 20 } as const;
+
+/**
+ * The rent period a moment belongs to, named by the NYC date of the most recent Sunday 8 PM.
+ * When this changes, a week's rent is due.
+ */
+export function rentPeriodKey(now: number = Date.now()): string {
+  const t = nycTime(now);
+  const [y, m, d] = nycDateKey(now).split("-").map(Number) as [number, number, number];
+  let back = t.weekday - RENT_DUE.weekday;
+  if (back < 0) back += 7;
+  if (back === 0 && t.hour < RENT_DUE.hour) back = 7;
+  return new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10);
+}
+
 export function nycTime(now: number = Date.now()): NycTime {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: NYC_TZ,

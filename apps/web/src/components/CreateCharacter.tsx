@@ -3,109 +3,140 @@
 import { useMutation } from "convex/react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
-import { ORIGINS, SHIRT_COLORS, SKIN_TONES, STATUSES, TRAITS, ORIGIN_CASH_BONUS } from "@nyl/content";
+import {
+  DEFAULT_LOOK,
+  HAIR_COLORS,
+  HAIR_STYLES,
+  ORIGINS,
+  ORIGIN_CASH_BONUS,
+  PANTS_COLORS,
+  SHIRT_COLORS,
+  SKIN_TONES,
+  STATUSES,
+  TRAITS,
+  type HairStyleId,
+  type Look,
+} from "@nyl/content";
+import { playerMessage } from "@/lib/errors";
+import { CharacterPreview } from "./CharacterPreview";
 
 export function CreateCharacter({ token }: { token: string }) {
   const create = useMutation(api.characters.create);
   const [name, setName] = useState("");
+  const [look, setLook] = useState<Look>(DEFAULT_LOOK);
   const [origin, setOrigin] = useState<string>(ORIGINS[0].id);
   const [status, setStatus] = useState<string>(STATUSES[0].id);
   const [trait, setTrait] = useState<string>(TRAITS[0].id);
-  const [skin, setSkin] = useState<string>(SKIN_TONES[6]);
-  const [shirt, setShirt] = useState<string>(SHIRT_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const statusDef = STATUSES.find((s) => s.id === status);
   const cash = (statusDef?.startingCash ?? 0) + (ORIGIN_CASH_BONUS[origin] ?? 0);
+  const set = <K extends keyof Look>(k: K, v: Look[K]) => setLook((l) => ({ ...l, [k]: v }));
 
   async function submit() {
     setBusy(true);
     setError(null);
     try {
-      await create({ token, name, origin, status, trait, look: { skin, shirt } });
+      await create({ token, name, origin, status, trait, look });
     } catch (e) {
-      setError(e instanceof Error ? e.message.replace(/^.*Uncaught Error: /, "").split("\n")[0]! : "Something went wrong");
+      setError(playerMessage(e));
       setBusy(false);
     }
   }
 
   return (
-    <main className="min-h-full overflow-y-auto bg-[#11131a] px-4 pb-10 pt-8">
-      <div className="mx-auto max-w-md">
-        <p className="text-xs font-medium uppercase tracking-widest text-white/50">JFK Terminal 4 · Arrivals</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">You just landed.</h1>
-        <p className="mt-2 text-sm text-white/70">Two suitcases and some savings. Who are you, and where did you come from?</p>
+    <main className="flex h-full flex-col overflow-hidden bg-[#11131a] md:flex-row">
+      {/* Preview: pinned on top for phones, left column on desktop */}
+      <div className="h-[38vh] shrink-0 md:sticky md:top-0 md:h-full md:w-1/2">
+        <CharacterPreview look={look} name={name} />
+      </div>
 
-        <section className="mt-8 space-y-6">
-          <Field label="Name">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={20}
-              placeholder="What should Brooklyn call you?"
-              className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base outline-none focus:border-white/40"
-            />
-          </Field>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-6 md:px-10 md:pt-12">
+        <div className="mx-auto max-w-md">
+          <p className="text-xs font-medium uppercase tracking-widest text-white/50">JFK Terminal 4 · Arrivals</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">You just landed.</h1>
+          <p className="mt-2 text-sm text-white/70">Two suitcases and some savings. Who are you, and where did you come from?</p>
 
-          <Field label="Skin tone">
-            <div className="flex flex-wrap gap-2">
-              {SKIN_TONES.map((c) => (
-                <Swatch key={c} color={c} selected={skin === c} onClick={() => setSkin(c)} />
-              ))}
-            </div>
-          </Field>
+          <section className="mt-8 space-y-6">
+            <Field label="Name">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={20}
+                placeholder="What should Brooklyn call you?"
+                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base outline-none focus:border-white/40"
+              />
+            </Field>
 
-          <Field label="Shirt">
-            <div className="flex flex-wrap gap-2">
-              {SHIRT_COLORS.map((c) => (
-                <Swatch key={c} color={c} selected={shirt === c} onClick={() => setShirt(c)} />
-              ))}
-            </div>
-          </Field>
+            <Field label="Skin tone">
+              <Swatches colors={SKIN_TONES} value={look.skin} onPick={(c) => set("skin", c)} />
+            </Field>
 
-          <Field label="Where you're from">
-            <div className="grid gap-2">
-              {ORIGINS.map((o) => (
-                <Choice key={o.id} selected={origin === o.id} onClick={() => setOrigin(o.id)} title={o.name} note={o.perk} />
-              ))}
-            </div>
-          </Field>
+            <Field label="Hair">
+              <div className="flex flex-wrap gap-2">
+                {HAIR_STYLES.map((h) => (
+                  <Pill key={h.id} selected={look.hair === h.id} onClick={() => set("hair", h.id as HairStyleId)}>
+                    {h.name}
+                  </Pill>
+                ))}
+              </div>
+              <div className="mt-3">
+                <Swatches colors={HAIR_COLORS} value={look.hairColor} onPick={(c) => set("hairColor", c)} small />
+              </div>
+              {(look.hair === "headwrap" || look.hair === "hijab") && (
+                <p className="mt-2 text-xs text-white/50">The color above sets the fabric.</p>
+              )}
+            </Field>
 
-          <Field label="Your status">
-            <div className="grid gap-2">
-              {STATUSES.map((s) => (
-                <Choice key={s.id} selected={status === s.id} onClick={() => setStatus(s.id)} title={s.name} note={s.workRules} />
-              ))}
-            </div>
-          </Field>
+            <Field label="Shirt">
+              <Swatches colors={SHIRT_COLORS} value={look.shirt} onPick={(c) => set("shirt", c)} />
+            </Field>
 
-          <Field label="Trait">
-            <div className="flex flex-wrap gap-2">
-              {TRAITS.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTrait(t.id)}
-                  className={`rounded-full border px-3 py-1.5 text-sm ${trait === t.id ? "border-white bg-white text-black" : "border-white/20 text-white/80"}`}
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          </Field>
-        </section>
+            <Field label="Pants">
+              <Swatches colors={PANTS_COLORS} value={look.pants} onPick={(c) => set("pants", c)} />
+            </Field>
 
-        <div className="mt-8 rounded-lg bg-white/5 p-3 text-sm text-white/70">
-          You arrive with <span className="font-semibold text-white">${cash.toLocaleString("en-US")}</span>. Rent is due Sunday.
+            <Field label="Where you're from">
+              <div className="grid gap-2">
+                {ORIGINS.map((o) => (
+                  <Choice key={o.id} selected={origin === o.id} onClick={() => setOrigin(o.id)} title={o.name} note={o.perk} />
+                ))}
+              </div>
+            </Field>
+
+            <Field label="Your status">
+              <div className="grid gap-2">
+                {STATUSES.map((s) => (
+                  <Choice key={s.id} selected={status === s.id} onClick={() => setStatus(s.id)} title={s.name} note={s.workRules} />
+                ))}
+              </div>
+            </Field>
+
+            <Field label="Trait">
+              <div className="flex flex-wrap gap-2">
+                {TRAITS.map((t) => (
+                  <Pill key={t.id} selected={trait === t.id} onClick={() => setTrait(t.id)}>
+                    {t.name}
+                  </Pill>
+                ))}
+              </div>
+            </Field>
+          </section>
+
+          <div className="mt-8 rounded-lg bg-white/5 p-3 text-sm text-white/70">
+            You arrive with <span className="font-semibold text-white">${cash.toLocaleString("en-US")}</span> and a basement
+            room in Crown Heights at $180 a week. Rent is due Sunday.
+          </div>
+          {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+          <button
+            onClick={submit}
+            disabled={busy || name.trim().length < 2}
+            className="mt-4 w-full rounded-lg bg-[#f3a712] py-3 font-semibold text-black disabled:opacity-40"
+          >
+            {busy ? "Getting your MetroCard…" : "Leave the airport"}
+          </button>
         </div>
-        {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-        <button
-          onClick={submit}
-          disabled={busy || name.trim().length < 2}
-          className="mt-4 w-full rounded-lg bg-[#f3a712] py-3 font-semibold text-black disabled:opacity-40"
-        >
-          {busy ? "Getting your MetroCard…" : "Leave the airport"}
-        </button>
       </div>
     </main>
   );
@@ -120,14 +151,40 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Swatch({ color, selected, onClick }: { color: string; selected: boolean; onClick: () => void }) {
+function Swatches({
+  colors,
+  value,
+  onPick,
+  small,
+}: {
+  colors: readonly string[];
+  value: string;
+  onPick: (c: string) => void;
+  small?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {colors.map((c) => (
+        <button
+          key={c}
+          aria-label={c}
+          onClick={() => onPick(c)}
+          style={{ backgroundColor: c }}
+          className={`${small ? "size-7" : "size-9"} rounded-full ring-offset-2 ring-offset-[#11131a] ${value === c ? "ring-2 ring-white" : ""}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function Pill({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
-      aria-label={color}
       onClick={onClick}
-      style={{ backgroundColor: color }}
-      className={`size-9 rounded-full ring-offset-2 ring-offset-[#11131a] ${selected ? "ring-2 ring-white" : ""}`}
-    />
+      className={`rounded-full border px-3 py-1.5 text-sm ${selected ? "border-white bg-white text-black" : "border-white/20 text-white/80"}`}
+    >
+      {children}
+    </button>
   );
 }
 

@@ -10,12 +10,23 @@ export function propLabelPos(p: Prop): [number, number, number] {
   return [cx, 1.9, p.y + p.h / 2];
 }
 
-export function Props({ room, night }: { room: RoomDef; night: boolean }) {
+export function Props({ room, night, onPick }: { room: RoomDef; night: boolean; onPick?: (p: Prop) => void }) {
   return (
     <group>
-      {room.props.map((p) => (
-        <PropMesh key={p.id} prop={p} night={night} />
-      ))}
+      {room.props
+        .filter((p) => p.kind !== "door")
+        .map((p) => (
+          <group
+            key={p.id}
+            onClick={(e) => {
+              if (!p.actions?.length || !onPick) return;
+              e.stopPropagation();
+              onPick(p);
+            }}
+          >
+            <PropMesh prop={p} night={night} />
+          </group>
+        ))}
     </group>
   );
 }
@@ -144,6 +155,8 @@ function PropMesh({ prop: p, night }: { prop: Prop; night: boolean }) {
           ))}
         </group>
       );
+    case "door":
+      return null;
     case "lamp":
       return (
         <group position={[cx, 0, cz]}>

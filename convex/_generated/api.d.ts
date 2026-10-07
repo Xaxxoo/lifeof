@@ -8,12 +8,17 @@
  * @module
  */
 
+import type * as bank from "../bank.js";
+import type * as build from "../build.js";
 import type * as characters from "../characters.js";
 import type * as chat from "../chat.js";
 import type * as city from "../city.js";
 import type * as crons from "../crons.js";
+import type * as dev from "../dev.js";
 import type * as feeds from "../feeds.js";
 import type * as lib from "../lib.js";
+import type * as play from "../play.js";
+import type * as work from "../work.js";
 import type * as world from "../world.js";
 
 import type {
@@ -23,12 +28,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  bank: typeof bank;
+  build: typeof build;
   characters: typeof characters;
   chat: typeof chat;
   city: typeof city;
   crons: typeof crons;
+  dev: typeof dev;
   feeds: typeof feeds;
   lib: typeof lib;
+  play: typeof play;
+  work: typeof work;
   world: typeof world;
 }>;
 

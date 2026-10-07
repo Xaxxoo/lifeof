@@ -80,3 +80,58 @@ export function findPath(grid: RoomGrid, start: Tile, goal: Tile, maxNodes = 409
   }
   return null;
 }
+
+/** Tiles covered by a w×h footprint at (x, y), rotated in 90° steps. */
+export function footprintTiles(x: number, y: number, w: number, h: number, rot = 0): Tile[] {
+  const [fw, fh] = rot % 2 === 1 ? [h, w] : [w, h];
+  const out: Tile[] = [];
+  for (let dx = 0; dx < fw; dx++) for (let dy = 0; dy < fh; dy++) out.push({ x: x + dx, y: y + dy });
+  return out;
+}
+
+/** Walkable tiles touching a footprint (4-neighbours), where an avatar stands to use it. */
+export function adjacentTiles(grid: RoomGrid, footprint: Tile[]): Tile[] {
+  const inside = new Set(footprint.map(tileKey));
+  const seen = new Set<string>();
+  const out: Tile[] = [];
+  for (const t of footprint) {
+    for (const d of DIRS) {
+      const n = { x: t.x + d.x, y: t.y + d.y };
+      const k = tileKey(n);
+      if (inside.has(k) || seen.has(k)) continue;
+      seen.add(k);
+      if (isWalkable(grid, n)) out.push(n);
+    }
+  }
+  return out;
+}
+
+/** Shortest walk (BFS) from start to whichever goal tile is closest. */
+export function findPathToAny(grid: RoomGrid, start: Tile, goals: Tile[], maxNodes = 4096): Tile[] | null {
+  if (!isWalkable(grid, start) || goals.length === 0) return null;
+  const goalKeys = new Set(goals.map(tileKey));
+  const startKey = tileKey(start);
+  if (goalKeys.has(startKey)) return [start];
+  const cameFrom = new Map<string, Tile | null>([[startKey, null]]);
+  const queue: Tile[] = [start];
+  while (queue.length > 0 && cameFrom.size < maxNodes) {
+    const cur = queue.shift()!;
+    for (const d of DIRS) {
+      const n = { x: cur.x + d.x, y: cur.y + d.y };
+      const k = tileKey(n);
+      if (cameFrom.has(k) || !isWalkable(grid, n)) continue;
+      cameFrom.set(k, cur);
+      if (goalKeys.has(k)) {
+        const path: Tile[] = [n];
+        let prev: Tile | null = cur;
+        while (prev) {
+          path.unshift(prev);
+          prev = cameFrom.get(tileKey(prev)) ?? null;
+        }
+        return path;
+      }
+      queue.push(n);
+    }
+  }
+  return null;
+}

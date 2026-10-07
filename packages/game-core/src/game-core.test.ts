@@ -79,3 +79,43 @@ describe("clock", () => {
     expect(isOpenAt(bar, { hour: 12, minute: 0, weekday: 6, label: "" })).toBe(false);
   });
 });
+
+import { activityProgress, adjacentTiles, findPathToAny, footprintTiles, needsDuringActivity, rentPeriodKey, skillLevel } from "./index";
+
+describe("m1 rules", () => {
+  it("rotates footprints", () => {
+    expect(footprintTiles(0, 0, 2, 1, 0).length).toBe(2);
+    expect(footprintTiles(0, 0, 2, 1, 1)).toEqual([{ x: 0, y: 0 }, { x: 0, y: 1 }]);
+  });
+
+  it("walks to the nearest free side of an object", () => {
+    const grid: RoomGrid = { width: 5, height: 5, blocked: new Set(["2,2"]) };
+    const goals = adjacentTiles(grid, [{ x: 2, y: 2 }]);
+    expect(goals.length).toBe(4);
+    const path = findPathToAny(grid, { x: 0, y: 2 }, goals);
+    expect(path!.at(-1)).toEqual({ x: 1, y: 2 });
+  });
+
+  it("rolls the rent period at Sunday 8 PM New York time", () => {
+    // Sun 2026-10-11 19:59 EDT = 23:59 UTC, still last week's period.
+    expect(rentPeriodKey(Date.UTC(2026, 9, 11, 23, 59))).toBe("2026-10-04");
+    // Sun 2026-10-11 20:00 EDT = Mon 00:00 UTC, new period.
+    expect(rentPeriodKey(Date.UTC(2026, 9, 12, 0, 0))).toBe("2026-10-11");
+    // Wed 2026-10-07 noon EDT.
+    expect(rentPeriodKey(Date.UTC(2026, 9, 7, 16, 0))).toBe("2026-10-04");
+  });
+
+  it("levels skills from XP", () => {
+    expect(skillLevel(0)).toBe(1);
+    expect(skillLevel(60)).toBe(2);
+    expect(skillLevel(99999)).toBe(10);
+  });
+
+  it("pays need changes in proportion to time done", () => {
+    const a = { startsAt: 1000, endsAt: 3000, needs: { hunger: 40 } };
+    expect(activityProgress(a, 2000)).toBe(0.5);
+    const n = needsDuringActivity(startingNeeds(), a, 2000);
+    expect(n.hunger).toBe(100);
+    expect(needsDuringActivity({ ...startingNeeds(), hunger: 10 }, a, 2000).hunger).toBe(30);
+  });
+});

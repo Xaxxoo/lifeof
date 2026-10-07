@@ -4,7 +4,18 @@ import { useMutation } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Doc } from "@convex/_generated/dataModel";
-import { computeMood, decayNeeds, moodBand, NEED_KEYS, type NeedKey } from "@nyl/game-core";
+import {
+  activeMoodlets,
+  activityProgress,
+  computeMood,
+  decayNeeds,
+  moodBand,
+  NEED_KEYS,
+  needsDuringActivity,
+  type NeedKey,
+} from "@nyl/game-core";
+import { playerMessage } from "@/lib/errors";
+import { useGame } from "@/lib/store";
 
 const NEED_LABEL: Record<NeedKey, string> = {
   hunger: "Hunger",
@@ -34,15 +45,40 @@ interface HudProps {
   city: Doc<"cityState"> | null;
   clockLabel: string;
   online: number;
+  place: string;
+  isHome: boolean;
+  buildMode: boolean;
+  onToggleBuild: () => void;
+  onOpenPhone: () => void;
+  hideBottomPanels: boolean;
 }
 
-export function Hud({ token, roomId, me, city, clockLabel, online }: HudProps) {
+export function Hud({
+  token,
+  roomId,
+  me,
+  city,
+  clockLabel,
+  online,
+  place,
+  isHome,
+  buildMode,
+  onToggleBuild,
+  onOpenPhone,
+  hideBottomPanels,
+}: HudProps) {
   const [todayOpen, setTodayOpen] = useState(false);
   const [needsOpen, setNeedsOpen] = useState(false);
-  const now = useNow(5000);
+  const stop = useMutation(api.play.stop);
+  const toast = useGame((s) => s.toast);
+  const clockOffset = useGame((s) => s.clockOffset);
+  // Re-render every second so timers and need bars move.
+  const nowS = useNow(1000) + clockOffset;
 
-  const needs = me ? decayNeeds(me.needs, me.needsUpdatedAt, now) : null;
-  const mood = needs ? computeMood(needs) : 0;
+  const needs = me ? needsDuringActivity(decayNeeds(me.needs, me.needsUpdatedAt, nowS), me.activity, nowS) : null;
+  const moodlets = activeMoodlets(me?.moodlets, nowS);
+  const mood = needs ? computeMood(needs, moodlets, nowS) : 0;
+  const act = me?.activity && me.activity.kind === "use" ? me.activity : null;
   const band = moodBand(mood);
   const troubled = city?.subway.lines.filter((l) => l.status !== "good") ?? [];
 
@@ -50,11 +86,12 @@ export function Hud({ token, roomId, me, city, clockLabel, online }: HudProps) {
     <>
       {/* Top bar */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="pointer-events-auto rounded-xl bg-black/65 px-3 py-2 backdrop-blur">
-          <p className="text-sm font-semibold tabular-nums">{clockLabel}</p>
-          <p className="text-[11px] text-white/70">
+        <div className="pointer-events-auto min-w-0 rounded-xl bg-black/65 px-3 py-2 backdrop-blur">
+          <p className="whitespace-nowrap text-sm font-semibold tabular-nums">{clockLabel}</p>
+          <p className="truncate text-[11px] text-white/70">
             {city ? `${Math.round(city.weather.tempF)}°F · ${city.weather.summary}` : "Brooklyn"}
           </p>
+          <p className="hidden truncate text-[10px] text-white/45 sm:block">{place}</p>
         </div>
         <button
           onClick={() => setTodayOpen((v) => !v)}
@@ -64,24 +101,49 @@ export function Hud({ token, roomId, me, city, clockLabel, online }: HudProps) {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
             <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
           </span>
-          <span>
-            <span className="block text-[11px] font-semibold uppercase tracking-wider">Today in Brooklyn</span>
+          <span className="whitespace-nowrap">
+            <span className="block text-[11px] font-semibold uppercase tracking-wider">
+              <span className="sm:hidden">Live</span>
+              <span className="hidden sm:inline">Today in Brooklyn</span>
+            </span>
             <span className="block text-[11px] text-white/70">
-              {troubled.length ? `${troubled.length} lines with issues` : "Trains running"} · {online} here
+              {troubled.length ? `${troubled.length} lines late` : "Trains OK"}
+              <span className="hidden sm:inline"> · {online} here</span>
             </span>
           </span>
         </button>
-        <div className="pointer-events-auto rounded-xl bg-black/65 px-3 py-2 text-right backdrop-blur">
+        <div className="pointer-events-auto whitespace-nowrap rounded-xl bg-black/65 px-3 py-2 text-right backdrop-blur">
           <p className="text-sm font-semibold tabular-nums">${(me?.cash ?? 0).toLocaleString("en-US")}</p>
-          <p className="text-[11px] text-white/70">Rent due Sun</p>
+          <p className={`text-[11px] ${me && me.rent.owed > 0 ? "text-red-300" : "text-white/70"}`}>
+            {me && me.rent.owed > 0 ? `Owe $${me.rent.owed}` : `Rent $${me?.rent.perWeek ?? 180} Sun`}
+          </p>
         </div>
       </div>
 
       {todayOpen && city && <TodayCard city={city} onClose={() => setTodayOpen(false)} />}
 
-      {/* Bottom: mood + chat */}
-      <div className="absolute inset-x-0 bottom-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {needsOpen && needs && (
+      {/* Bottom: activity, mood, chat, phone */}
+      <div className="absolute inset-x-0 bottom-0 z-20 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {act && !hideBottomPanels && (
+          <div className="mx-auto mb-2 flex max-w-md items-center gap-3 rounded-xl bg-black/75 px-3 py-2 backdrop-blur">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold">
+                {nowS < act.startsAt ? `Heading over… then ${act.status}` : act.status}
+              </p>
+              <div className="mt-1 h-1.5 rounded-full bg-white/15">
+                <div className="h-full rounded-full bg-sky-400" style={{ width: `${activityProgress(act, nowS) * 100}%` }} />
+              </div>
+            </div>
+            <span className="text-[11px] tabular-nums text-white/60">{fmt(Math.max(0, act.endsAt - nowS))}</span>
+            <button
+              onClick={() => void stop({ token }).catch((e) => toast(playerMessage(e), "error"))}
+              className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold"
+            >
+              Stop
+            </button>
+          </div>
+        )}
+        {needsOpen && needs && !hideBottomPanels && (
           <div className="mb-2 rounded-xl bg-black/75 p-3 backdrop-blur">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/70">
               Mood: {band} ({Math.round(mood)})
@@ -102,6 +164,16 @@ export function Hud({ token, roomId, me, city, clockLabel, online }: HudProps) {
                 </div>
               ))}
             </div>
+            {moodlets.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1">
+                {moodlets.map((m) => (
+                  <span key={m.id} className={`rounded-full px-2 py-0.5 text-[10px] ${m.value >= 0 ? "bg-emerald-500/20 text-emerald-200" : "bg-red-500/20 text-red-200"}`}>
+                    {m.value >= 0 ? "+" : ""}
+                    {m.value} {m.label}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div className="flex items-center gap-2">
@@ -115,6 +187,17 @@ export function Hud({ token, roomId, me, city, clockLabel, online }: HudProps) {
             {Math.round(mood)}
           </button>
           <ChatBar token={token} roomId={roomId} />
+          {isHome && (
+            <button
+              onClick={onToggleBuild}
+              className={`shrink-0 rounded-full px-3 py-2.5 text-sm font-semibold ${buildMode ? "bg-white text-black" : "bg-black/65 text-white backdrop-blur"}`}
+            >
+              🛠️
+            </button>
+          )}
+          <button onClick={onOpenPhone} aria-label="Phone" className="shrink-0 rounded-full bg-black/65 px-3 py-2.5 text-sm backdrop-blur">
+            📱
+          </button>
         </div>
       </div>
     </>
@@ -205,7 +288,7 @@ function ChatBar({ token, roomId }: { token: string; roomId: string }) {
   const [text, setText] = useState("");
   return (
     <form
-      className="flex flex-1 gap-2"
+      className="flex min-w-0 flex-1 gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         const body = text.trim();
@@ -218,12 +301,19 @@ function ChatBar({ token, roomId }: { token: string; roomId: string }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         maxLength={140}
-        placeholder="Say something to the block…"
+        placeholder="Say something…"
         className="min-w-0 flex-1 rounded-full bg-black/65 px-4 py-2.5 text-base outline-none backdrop-blur placeholder:text-white/40 focus:ring-1 focus:ring-white/40"
       />
-      <button className="rounded-full bg-[#f3a712] px-4 text-sm font-semibold text-black">Say</button>
+      <button aria-label="Say" className="shrink-0 rounded-full bg-[#f3a712] px-3.5 text-sm font-bold text-black">
+        ↑
+      </button>
     </form>
   );
+}
+
+function fmt(ms: number) {
+  const s = Math.ceil(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function useNow(ms: number) {

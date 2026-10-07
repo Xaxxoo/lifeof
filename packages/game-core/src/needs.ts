@@ -62,6 +62,15 @@ export interface Moodlet {
 }
 
 /** Mood = average of needs, nudged by active moodlets, clamped 0–100. */
+export function activeMoodlets(moodlets: Moodlet[] | undefined, now: number): Moodlet[] {
+  return (moodlets ?? []).filter((m) => m.expiresAt > now);
+}
+
+/** Adds or refreshes a moodlet by id and drops expired ones. */
+export function upsertMoodlet(moodlets: Moodlet[] | undefined, m: Moodlet, now: number): Moodlet[] {
+  return [...activeMoodlets(moodlets, now).filter((x) => x.id !== m.id), m];
+}
+
 export function computeMood(needs: Needs, moodlets: Moodlet[] = [], now = Date.now()): number {
   const avg = NEED_KEYS.reduce((s, k) => s + needs[k], 0) / NEED_KEYS.length;
   const bonus = moodlets.filter((m) => m.expiresAt > now).reduce((s, m) => s + m.value, 0);

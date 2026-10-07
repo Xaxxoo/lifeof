@@ -6,73 +6,175 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { Color } from "three";
 import { api } from "@convex/_generated/api";
-import { ROOMS, blockedTiles } from "@nyl/content";
-import { daylight, findPath, nycTime, poseAt, tileAt, type MoveIntent, type RoomGrid } from "@nyl/game-core";
+import type { Id } from "@convex/_generated/dataModel";
+import {
+  ITEM_BY_ID,
+  buildRoomLayout,
+  normalizeLook,
+  roomDef,
+  sideTiles,
+  type ItemDef,
+  type PlacedItem,
+  type Prop,
+  type RoomDef,
+} from "@nyl/content";
+import { daylight, findPath, findPathToAny, footprintTiles, nycTime, poseAt, tileAt, type MoveIntent } from "@nyl/game-core";
+import { playerMessage } from "@/lib/errors";
 import { serverNow, useGame } from "@/lib/store";
-import { Avatar } from "./scene/Avatar";
-import { Props, propLabelPos } from "./scene/Props";
+import { ActionMenu } from "./ActionMenu";
+import { BuildPanel, type Ghost } from "./BuildPanel";
+import { Hud } from "./Hud";
+import { Phone } from "./Phone";
+import { Avatar, type ActivityAnchor } from "./scene/Avatar";
+import { Furniture, FurniturePiece, type PlacedObject } from "./scene/Furniture";
+import { HomeRoom } from "./scene/HomeRoom";
 import { LabelProjector, anchorRef, useLabelAnchors } from "./scene/Labels";
+import { Props, propLabelPos } from "./scene/Props";
 import { Street } from "./scene/Street";
 import { Weather } from "./scene/Weather";
-import { Hud } from "./Hud";
 
 const BUBBLE_MS = 8_000;
 const NIGHT_SKY = new Color("#0b1020");
 const DAY_SKY = new Color("#a9d2ee");
+const NO_OBJECTS: PlacedObject[] = [];
 
 export function World({ token, roomId }: { token: string; roomId: string }) {
-  const room = ROOMS[roomId]!;
-  const grid: RoomGrid = useMemo(
-    () => ({ width: room.width, height: room.height, blocked: blockedTiles(room) }),
-    [room],
-  );
+  const room = useMemo(() => roomDef(roomId)!, [roomId]);
+  const isHome = room.kind === "home";
+  const objects = (useQuery(api.world.objects, isHome ? { roomId } : "skip") as PlacedObject[] | undefined) ?? NO_OBJECTS;
+  const layout = useMemo(() => buildRoomLayout(room, objects), [room, objects]);
+
   const me = useQuery(api.characters.me, { token });
   const occupants = useQuery(api.world.occupants, { roomId }) ?? [];
   const messages = useQuery(api.chat.recent, { roomId }) ?? [];
   const city = useQuery(api.city.get, {});
   const move = useMutation(api.world.move);
+  const start = useMutation(api.play.start);
+  const place = useMutation(api.build.place);
+  const moveObject = useMutation(api.build.move);
+  const sell = useMutation(api.build.sell);
+
   const localIntent = useGame((s) => s.localIntent);
   const setLocalIntent = useGame((s) => s.setLocalIntent);
+  const clockOffset = useGame((s) => s.clockOffset);
+  const toast = useGame((s) => s.toast);
   const now = useTick(1000);
+  const nowS = now + clockOffset;
   const anchors = useLabelAnchors();
+
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [buildMode, setBuildMode] = useState(false);
+  const [ghost, setGhost] = useState<Ghost | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const mine = occupants.find((o) => o.characterId === me?._id);
   const serverIntent: MoveIntent | null = mine ? { path: mine.path, startedAt: mine.startedAt } : null;
   // Prefer our optimistic path until the server's newer copy lands.
   const myIntent =
     localIntent && (!serverIntent || localIntent.startedAt > serverIntent.startedAt + 250) ? localIntent : serverIntent;
+  const standing = myIntent ? tileAt(myIntent, nowS) : null;
 
-  function onTileClick(x: number, y: number) {
+  const ghostValid = useMemo(
+    () => (ghost ? canPlace(room, objects, ghost, standing) : false),
+    [room, objects, ghost, standing],
+  );
+
+  function walkTo(x: number, y: number) {
     if (!myIntent) return;
-    const from = tileAt(myIntent, serverNow());
-    const path = findPath(grid, from, { x, y });
+    const path = findPath(layout.grid, tileAt(myIntent, serverNow()), { x, y });
     if (!path) return;
     setLocalIntent({ path, startedAt: serverNow() });
-    void move({ token, target: { x, y } });
+    void move({ token, target: { x, y } }).catch((e) => toast(playerMessage(e), "error"));
+  }
+
+  function onTileClick(x: number, y: number) {
+    if (buildMode) {
+      if (ghost) setGhost({ ...ghost, x, y });
+      return;
+    }
+    setMenuKey(null);
+    walkTo(x, y);
+  }
+
+  function onPickProp(p: Prop) {
+    if (buildMode) return;
+    setPhoneOpen(false);
+    setMenuKey(`prop:${p.id}`);
+  }
+
+  function onPickObject(o: PlacedObject) {
+    if (buildMode) {
+      if (!ghost) setSelectedId(o._id);
+      return;
+    }
+    const item = ITEM_BY_ID[o.itemId];
+    if (!item?.actions.length) return;
+    setPhoneOpen(false);
+    setMenuKey(`obj:${o._id}`);
+  }
+
+  async function doAction(target: string, actionId: string) {
+    setMenuKey(null);
+    setPhoneOpen(false);
+    const thing = layout.interactables.get(target);
+    if (myIntent && thing) {
+      const path = findPathToAny(layout.grid, tileAt(myIntent, serverNow()), sideTiles(thing.tiles));
+      if (path) setLocalIntent({ path, startedAt: serverNow() });
+    }
+    try {
+      const r = await start({ token, target, actionId });
+      if (r.trainDelayed) toast("Heads up: the L is delayed right now, in real life. You'll clock in late.", "info");
+    } catch (e) {
+      setLocalIntent(null);
+      toast(playerMessage(e), "error");
+    }
+  }
+
+  async function confirmGhost() {
+    if (!ghost) return;
+    try {
+      if (ghost.objectId) {
+        await moveObject({ token, objectId: ghost.objectId as Id<"objects">, x: ghost.x, y: ghost.y, rot: ghost.rot });
+      } else {
+        await place({ token, itemId: ghost.itemId, x: ghost.x, y: ghost.y, rot: ghost.rot, requestId: crypto.randomUUID() });
+        toast(`${ITEM_BY_ID[ghost.itemId]?.name} placed`, "good");
+      }
+      setGhost(null);
+    } catch (e) {
+      toast(playerMessage(e), "error");
+    }
+  }
+
+  function startPlacing(item: ItemDef) {
+    const spot = firstFreeSpot(room, objects, item, standing);
+    setGhost({ itemId: item.id, x: spot.x, y: spot.y, rot: 0 });
   }
 
   const t = nycTime(now);
-  const light = daylight(t);
-  const night = light < 0.35;
+  const light = isHome ? 0.85 : daylight(t);
+  const night = daylight(t) < 0.35;
   const summary = city?.weather.summary ?? "";
-  const weatherKind = /snow|flurr|sleet/i.test(summary) ? "snow" : /rain|shower|drizzle|storm/i.test(summary) ? "rain" : null;
+  const weatherKind = isHome ? null : /snow|flurr|sleet/i.test(summary) ? "snow" : /rain|shower|drizzle|storm/i.test(summary) ? "rain" : null;
 
   const bubbles = new Map<string, string>();
-  for (const m of messages) {
-    if (serverNow() - m._creationTime < BUBBLE_MS) bubbles.set(m.characterId, m.body);
-  }
+  for (const m of messages) if (nowS - m._creationTime < BUBBLE_MS) bubbles.set(m.characterId, m.body);
+
+  const menuThing = menuKey ? layout.interactables.get(menuKey) : null;
+  const selectedObj = selectedId ? objects.find((o) => o._id === selectedId) ?? null : null;
+  const lStatus = city?.subway.lines.find((l) => l.line === "L");
 
   return (
     <div className="fixed inset-0 touch-none select-none">
       <Canvas shadows dpr={[1, 2]}>
-        <SceneSky light={light} />
+        <SceneSky light={light} indoor={isHome} />
         <OrthographicCamera makeDefault position={[room.width / 2 + 20, 20, room.height / 2 + 20]} near={0.1} far={200} />
-        <CameraRig cx={room.width / 2} cz={room.height / 2} span={room.width} />
-        <ambientLight intensity={0.35 + light * 0.55} />
+        <CameraRig cx={room.width / 2} cz={room.height / 2} span={isHome ? room.width * 1.1 : room.width} />
+        <ambientLight intensity={isHome ? 0.7 : 0.35 + light * 0.55} />
         <hemisphereLight args={["#bcd9ff", "#3a3226", 0.25 + light * 0.35]} />
         <directionalLight
-          position={[room.width + 6, 16, -4]}
-          intensity={0.15 + light * 1.4}
+          position={[room.width + 6, 16, room.height + 4]}
+          intensity={isHome ? 0.9 : 0.15 + light * 1.4}
           castShadow
           shadow-mapSize={[1024, 1024]}
           shadow-camera-left={-14}
@@ -80,40 +182,62 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
           shadow-camera-top={14}
           shadow-camera-bottom={-14}
         />
-        <Street room={room} onTileClick={onTileClick} />
-        <Props room={room} night={night} />
+        {isHome ? (
+          <>
+            <HomeRoom room={room} night={night} onTileClick={onTileClick} onDoorClick={() => !buildMode && setMenuKey("prop:door")} />
+            <pointLight position={[room.width / 2, 2.3, room.height / 2]} intensity={night ? 8 : 3} distance={10} color="#ffd9a0" />
+          </>
+        ) : (
+          <>
+            <Street room={room} onTileClick={onTileClick} />
+            <Props room={room} night={night} onPick={onPickProp} />
+          </>
+        )}
+        <Furniture
+          objects={objects}
+          onPick={onPickObject}
+          highlight={ghost?.objectId ?? (buildMode ? selectedId : null)}
+        />
+        {ghost && ITEM_BY_ID[ghost.itemId] && (
+          <FurniturePiece item={ITEM_BY_ID[ghost.itemId]!} x={ghost.x} y={ghost.y} rot={ghost.rot} ghost valid={ghostValid} />
+        )}
         {occupants.map((o) => {
           const isMe = o.characterId === me?._id;
           return (
             <Avatar
               key={o.characterId}
-              skin={o.look.skin}
-              shirt={o.look.shirt}
+              look={normalizeLook(o.look)}
               intent={isMe && myIntent ? myIntent : { path: o.path, startedAt: o.startedAt }}
               isMe={isMe}
+              anchor={anchorFor(o.activity, layout.interactables, nowS)}
             />
           );
         })}
         <Weather kind={weatherKind} width={room.width} depth={room.height} />
         <LabelProjector anchors={anchors} />
       </Canvas>
+
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {room.props
-          .filter((p) => p.label)
-          .map((p) => (
-            <div key={p.id} ref={anchorRef(anchors, `prop:${p.id}`, () => propLabelPos(p))} className="absolute left-0 top-0">
-              <div className="whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">{p.label}</div>
-            </div>
-          ))}
+        {!isHome &&
+          room.props
+            .filter((p) => p.label)
+            .map((p) => (
+              <div key={p.id} ref={anchorRef(anchors, `prop:${p.id}`, () => propLabelPos(p))} className="absolute left-0 top-0">
+                <div className="whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">{p.label}</div>
+              </div>
+            ))}
         {occupants.map((o) => {
           const isMe = o.characterId === me?._id;
           const intent = isMe && myIntent ? myIntent : { path: o.path, startedAt: o.startedAt };
+          const anchor = anchorFor(o.activity, layout.interactables, nowS);
           const bubble = bubbles.get(o.characterId);
+          const acting = o.activity && nowS >= o.activity.startsAt ? o.activity.status : null;
           return (
             <div
               key={o.characterId}
-              ref={anchorRef(anchors, `avatar:${o.characterId}`, (t) => {
-                const pose = poseAt(intent, t);
+              ref={anchorRef(anchors, `avatar:${o.characterId}`, (tNow) => {
+                if (anchor?.at && tNow >= anchor.startsAt && anchor.pose !== "stand") return [anchor.at.x, anchor.at.y + 1.3, anchor.at.z];
+                const pose = poseAt(intent, tNow);
                 return [pose.x + 0.5, 1.85, pose.y + 0.5];
               })}
               className="absolute left-0 top-0 flex flex-col items-center gap-1"
@@ -123,6 +247,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
                   {bubble}
                 </div>
               )}
+              {acting && <div className="whitespace-nowrap rounded-full bg-sky-500/90 px-1.5 text-[10px] font-semibold text-white">{acting}</div>}
               <div className={`whitespace-nowrap rounded-full px-1.5 text-[10px] font-semibold ${isMe ? "bg-[#f3a712] text-black" : "bg-black/60 text-white"}`}>
                 {o.name}
               </div>
@@ -130,20 +255,145 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
           );
         })}
       </div>
-      <Hud token={token} roomId={roomId} me={me ?? null} city={city ?? null} clockLabel={t.label} online={occupants.length} />
+
+      <Hud
+        token={token}
+        roomId={roomId}
+        me={me ?? null}
+        city={city ?? null}
+        clockLabel={t.label}
+        online={occupants.length}
+        place={isHome ? "Your basement room · Crown Heights" : `${room.name} · ${room.neighborhood}`}
+        isHome={isHome}
+        buildMode={buildMode}
+        onToggleBuild={() => {
+          setBuildMode((b) => !b);
+          setGhost(null);
+          setSelectedId(null);
+          setMenuKey(null);
+          setPhoneOpen(false);
+        }}
+        onOpenPhone={() => {
+          setPhoneOpen((p) => !p);
+          setMenuKey(null);
+        }}
+        hideBottomPanels={buildMode || phoneOpen || !!menuThing}
+      />
+
+      {menuThing && menuKey && (
+        <ActionMenu
+          title={menuThing.label}
+          actionIds={menuThing.actions}
+          onChoose={(id) => void doAction(menuKey, id)}
+          onClose={() => setMenuKey(null)}
+          note={
+            menuThing.actions.includes("go_to_work")
+              ? me?.job
+                ? `L train right now: ${lStatus?.status === "good" ? "running normally" : lStatus?.status ?? "unknown"}.`
+                : "No job yet. Open Phone → Jobs."
+              : undefined
+          }
+        />
+      )}
+
+      {phoneOpen && me && (
+        <Phone token={token} me={me} onClose={() => setPhoneOpen(false)} onCallHome={() => void doAction("phone", "call_home")} />
+      )}
+
+      {buildMode && me && (
+        <BuildPanel
+          cash={me.cash}
+          ghost={ghost}
+          ghostValid={ghostValid}
+          selected={selectedObj ? { _id: selectedObj._id, itemId: selectedObj.itemId, paid: (selectedObj as PlacedObject & { paid?: number }).paid } : null}
+          onPickItem={startPlacing}
+          onRotate={() => ghost && setGhost({ ...ghost, rot: (ghost.rot + 1) % 4 })}
+          onConfirm={() => void confirmGhost()}
+          onCancelGhost={() => setGhost(null)}
+          onMoveSelected={() => {
+            if (!selectedObj) return;
+            setGhost({ itemId: selectedObj.itemId, x: selectedObj.x, y: selectedObj.y, rot: selectedObj.rot, objectId: selectedObj._id });
+            setSelectedId(null);
+          }}
+          onSellSelected={() => {
+            if (!selectedObj) return;
+            void sell({ token, objectId: selectedObj._id as Id<"objects"> })
+              .then((r) => toast(r.refund ? `Sold for $${r.refund}` : "Removed", "good"))
+              .catch((e) => toast(playerMessage(e), "error"));
+            setSelectedId(null);
+          }}
+          onClose={() => {
+            if (selectedId) setSelectedId(null);
+            else setBuildMode(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function SceneSky({ light }: { light: number }) {
+type Occupant = { activity: { status: string; pose: string; startsAt: number; endsAt: number; target: string } | null };
+
+function anchorFor(
+  activity: Occupant["activity"],
+  interactables: ReturnType<typeof buildRoomLayout>["interactables"],
+  nowS: number,
+): ActivityAnchor | null {
+  if (!activity) return null;
+  const thing = interactables.get(activity.target);
+  const pose = (activity.pose as ActivityAnchor["pose"]) ?? "stand";
+  const seated = pose !== "stand" && thing?.seat;
+  return {
+    startsAt: activity.startsAt,
+    active: nowS >= activity.startsAt,
+    pose: seated ? pose : "stand",
+    at: seated ? thing!.seat : null,
+    faceTo: thing && !seated ? thing.center : null,
+  };
+}
+
+/** Client-side mirror of the server's placement rules, for the green/red ghost. */
+function canPlace(room: RoomDef, objects: PlacedItem[], g: Ghost, standing: { x: number; y: number } | null): boolean {
+  const item = ITEM_BY_ID[g.itemId];
+  if (!item) return false;
+  const tiles = footprintTiles(g.x, g.y, item.w, item.h, g.rot);
+  if (tiles.some((t) => t.x < 0 || t.y < 0 || t.x >= room.width || t.y >= room.height)) return false;
+  const solid = new Set<string>();
+  const flat = new Set<string>();
+  for (const p of room.props) for (const t of footprintTiles(p.x, p.y, p.w, p.h)) solid.add(`${t.x},${t.y}`);
+  const door = room.props.find((p) => p.kind === "door");
+  const doorway = door ? `${door.x + 1},${door.y}` : "";
+  for (const o of objects) {
+    if (o._id === g.objectId) continue;
+    const other = ITEM_BY_ID[o.itemId];
+    if (!other) continue;
+    for (const t of footprintTiles(o.x, o.y, other.w, other.h, o.rot)) (other.walkable ? flat : solid).add(`${t.x},${t.y}`);
+  }
+  return tiles.every((t) => {
+    const k = `${t.x},${t.y}`;
+    if (item.walkable) return !flat.has(k);
+    return !solid.has(k) && k !== doorway && !(standing && standing.x === t.x && standing.y === t.y);
+  });
+}
+
+function firstFreeSpot(room: RoomDef, objects: PlacedItem[], item: ItemDef, standing: { x: number; y: number } | null) {
+  for (let y = 1; y < room.height; y++) {
+    for (let x = 1; x < room.width; x++) {
+      if (canPlace(room, objects, { itemId: item.id, x, y, rot: 0 }, standing)) return { x, y };
+    }
+  }
+  return { x: 1, y: 1 };
+}
+
+function SceneSky({ light, indoor }: { light: number; indoor: boolean }) {
   const get = useThree((s) => s.get);
   useEffect(() => {
-    get().scene.background = NIGHT_SKY.clone().lerp(DAY_SKY, light);
-  }, [get, light]);
+    get().scene.background = indoor ? new Color("#1a1612") : NIGHT_SKY.clone().lerp(DAY_SKY, light);
+  }, [get, light, indoor]);
   return null;
 }
 
-/** Keeps the block framed on any screen: fit width on phones, height on desktops. */
+/** Keeps the room framed on any screen: fit width on phones, height on desktops. */
 function CameraRig({ cx, cz, span }: { cx: number; cz: number; span: number }) {
   const get = useThree((s) => s.get);
   const size = useThree((s) => s.size);

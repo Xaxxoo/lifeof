@@ -3,7 +3,27 @@
 A multiplayer life sim in the browser. You just landed in New York with two suitcases and some savings. The city is real, live and shared with every other player. Make it.
 
 - **Product spec:** [`docs/PRD.md`](docs/PRD.md) (the editable team copy lives in Claude Docs; link at the top of the file)
-- **Current milestone:** M0 Spike: an isometric Brooklyn block, guest characters, tap-to-move multiplayer, room chat, and live MTA + weather + 311 feeds.
+- **Current milestone:** M1 One life: the core single-player loop on top of the M0 multiplayer base.
+
+## What's in M1
+
+| Area | Status |
+| --- | --- |
+| Onboarding with a live 3D character preview (skin, 11 hairstyles incl. braids, locs, afro, headwrap, hijab; hair, shirt and pants colors) | Done |
+| Tap objects to act: eat, cook, sleep, shower, toilet, TV, guitar, workouts, bodega, halal cart, barbershop, laundromat, bench | Done |
+| Actions walk you over, run on a timer, refill needs, and give partial credit if you stop early | Done |
+| Sit and sleep poses on furniture; status above your head; activity bar with Stop | Done |
+| Your own basement room (private), reached from the walk-up; starter furniture | Done |
+| Build mode: buy, place, rotate, move, sell (50% back); placement rules incl. keep the door clear | Done |
+| Food career (Dishwasher → Head Chef): apply on the phone, take the L to work, 20-min shifts, pay × mood, promotions | Done |
+| Real L train delays make you late (excused) with a moodlet | Done |
+| Skills (6), moodlets, mood bands | Done |
+| Money ledger (idempotent) and bank view | Done |
+| Sunday 8 PM rent ($180/week), late fees and arrears | Done |
+| Autopilot: one reduced-pay shift a day while offline | Done |
+| Real auth | Not yet (guest sessions) |
+
+Dev helpers (internal, refuse to run in production): `npx convex run dev:reset` wipes game tables; `npx convex run dev:makeRentDue` makes rent due now so you can test Sunday rent.
 
 ## What's in M0
 

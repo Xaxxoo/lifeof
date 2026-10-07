@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-brick: #8e4a35;
+  --color-tile: #f4f1ea;
+  --color-mta: #0039a6;
+}
+
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: #11131a;
+  color: #f4f1ea;
+}

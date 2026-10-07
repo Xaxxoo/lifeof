@@ -3,7 +3,25 @@
 A multiplayer life sim in the browser. You just landed in New York with two suitcases and some savings. The city is real, live and shared with every other player. Make it.
 
 - **Product spec:** [`docs/PRD.md`](docs/PRD.md) (the editable team copy lives in Claude Docs; link at the top of the file)
-- **Current milestone:** M1 One life: the core single-player loop on top of the M0 multiplayer base.
+- **Current milestone:** M2 The city: seven neighborhoods, the subway, venues, NPCs, gigs and more Live City.
+
+## What's in M2
+
+| Area | Status |
+| --- | --- |
+| 7 neighborhoods: Crown Heights (home), Bushwick, Bed-Stuy, Flatbush, Williamsburg, DUMBO, Prospect Park | Done |
+| Subway between them: real station lines, $3 fare, ride scene with random moments and tips, transfers | Done |
+| Real line delays add up to 30% to the ride (capped) and a moodlet | Done |
+| Venue interiors with opening hours (NYC time): Warehouse party, Sound system bar, Rooftop bar, Overpriced cafe | Done |
+| NPCs on every block; chat for social + charisma; "Talk about home" with NPCs from your origin | Done |
+| Gigs: DashDash delivery, Wagr dog walks, TaskBunny tasks; on-time tips, real rain doubles tips, ratings | Done |
+| Weather changes need decay (rain, snow, cold, heat), capped at 1.4× | Done |
+| 311 complaints per neighborhood (by ZIP) shown on the Today card and as small arrival moodlets | Done (simulated until a Socrata token is set) |
+| Heat outages in basement rooms when it's really below 45°F | Done |
+| Skill classes and activities: library coding class, spin class, open-air drum circle, garden, records, DJ set | Done |
+| Phone: Map (ride anywhere from a station), Gigs, Jobs, Bank, Me | Done |
+| Content tests: every room checked for overlaps, reachability, valid actions and two-way doors | Done (74 checks) |
+| Real NYC events feed, venue instancing above 30 players | Not yet |
 
 ## What's in M1
 

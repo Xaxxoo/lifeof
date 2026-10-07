@@ -59,18 +59,48 @@ export function simulatedWeather(now: number) {
   return { tempF: 55 + ((hour * 7) % 20), summary: "Partly Cloudy", precipChance: (hour * 13) % 40, alerts: [] as string[] };
 }
 
-export function simulated311(now: number) {
+const SIM_TYPES = ["Noise - Residential", "Illegal Parking", "HEAT/HOT WATER", "Rodent", "Blocked Driveway", "Noise - Street/Sidewalk"];
+
+/**
+ * Approximate ZIP codes for each launch neighborhood (room id). Good enough to put a real complaint on the right block;
+ * refine with NTA boundaries later.
+ */
+export const NEIGHBORHOOD_ZIPS: Record<string, string[]> = {
+  "bushwick-block": ["11237", "11221"],
+  "bed-stuy": ["11216", "11233"],
+  "crown-heights": ["11213", "11225"],
+  flatbush: ["11226", "11203", "11210"],
+  williamsburg: ["11211", "11249", "11206"],
+  dumbo: ["11201"],
+  "prospect-park": ["11215", "11238"],
+};
+
+type Item = { type: string; count: number; neighborhood?: string };
+
+export function simulated311(now: number): Item[] {
   const hour = Math.floor(now / 3_600_000);
-  const types = ["Noise - Residential", "Illegal Parking", "HEAT/HOT WATER", "Rodent", "Blocked Driveway"];
-  return types.map((type, i) => ({ type, count: 3 + ((hour + i * 5) % 12) })).sort((a, b) => b.count - a.count);
+  const borough = SIM_TYPES.slice(0, 5).map((type, i) => ({ type, count: 30 + ((hour + i * 5) % 40) }));
+  const blocks = Object.keys(NEIGHBORHOOD_ZIPS).flatMap((n, j) =>
+    SIM_TYPES.map((type, i) => ({ type, count: 1 + ((hour + i * 3 + j * 7) % 9), neighborhood: n }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3),
+  );
+  return [...borough.sort((a, b) => b.count - a.count), ...blocks];
 }
 
-/** Group 311 rows into the top complaint types. */
-export function top311(rows: { complaint_type?: string }[], limit = 5) {
-  const counts = new Map<string, number>();
-  for (const r of rows) if (r.complaint_type) counts.set(r.complaint_type, (counts.get(r.complaint_type) ?? 0) + 1);
-  return [...counts.entries()]
-    .map(([type, count]) => ({ type, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit);
+/** Group 311 rows into the borough's top types plus the top 3 per launch neighborhood. */
+export function group311(rows: { complaint_type?: string; incident_zip?: string }[]): Item[] {
+  const top = (list: typeof rows, limit: number) => {
+    const counts = new Map<string, number>();
+    for (const r of list) if (r.complaint_type) counts.set(r.complaint_type, (counts.get(r.complaint_type) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
+  };
+  const out: Item[] = top(rows, 5);
+  for (const [n, zips] of Object.entries(NEIGHBORHOOD_ZIPS)) {
+    for (const item of top(rows.filter((r) => r.incident_zip && zips.includes(r.incident_zip)), 3)) out.push({ ...item, neighborhood: n });
+  }
+  return out;
 }

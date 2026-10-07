@@ -119,3 +119,14 @@ describe("m1 rules", () => {
     expect(needsDuringActivity({ ...startingNeeds(), hunger: 10 }, a, 2000).hunger).toBe(30);
   });
 });
+
+import { weatherNeedMultipliers } from "./index";
+
+describe("weather", () => {
+  it("speeds up the right needs and caps the effect", () => {
+    expect(weatherNeedMultipliers({ tempF: 60, summary: "Sunny" })).toEqual({});
+    expect(weatherNeedMultipliers({ tempF: 60, summary: "Light Rain" }).hygiene).toBe(1.25);
+    const hotRain = weatherNeedMultipliers({ tempF: 95, summary: "Thunderstorms" });
+    expect(hotRain.hygiene).toBeLessThanOrEqual(1.4);
+  });
+});

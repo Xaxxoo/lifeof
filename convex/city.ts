@@ -2,7 +2,10 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
-import { parseMtaAlerts, simulated311, simulatedSubway, simulatedWeather, top311 } from "./feeds";
+import type { Doc } from "./_generated/dataModel";
+import { upsertMoodlet, type Moodlet } from "@nyl/game-core";
+import { isHomeRoom, roomDef } from "@nyl/content";
+import { group311, parseMtaAlerts, simulated311, simulatedSubway, simulatedWeather } from "./feeds";
 
 const KEY = "nyc";
 /** Use the last good value for an hour, then switch to simulated values (PRD §6.9). */
@@ -79,7 +82,7 @@ export const writeWeather = internalMutation({
 });
 
 export const writeBlockEvents = internalMutation({
-  args: { items: v.optional(v.array(v.object({ type: v.string(), count: v.number() }))) },
+  args: { items: v.optional(v.array(v.object({ type: v.string(), count: v.number(), neighborhood: v.optional(v.string()) }))) },
   handler: async (ctx, { items }) => {
     const s = await ensureState(ctx);
     const now = Date.now();
@@ -151,7 +154,7 @@ export const poll311 = internalAction({
     const since = new Date(Date.now() - 6 * 3_600_000).toISOString().slice(0, 19);
     const params = new URLSearchParams({
       borough: "BROOKLYN",
-      $select: "complaint_type",
+      $select: "complaint_type,incident_zip",
       $where: `created_date > '${since}'`,
       $limit: "1000",
     });
@@ -159,11 +162,63 @@ export const poll311 = internalAction({
     try {
       const rows = (await getJson(`${NYC_311}?${params}`, token ? { "X-App-Token": token } : {})) as {
         complaint_type?: string;
+        incident_zip?: string;
       }[];
-      await ctx.runMutation(internal.city.writeBlockEvents, { items: top311(rows) });
+      await ctx.runMutation(internal.city.writeBlockEvents, { items: group311(rows) });
     } catch (err) {
       console.warn("311 feed failed", err);
       await ctx.runMutation(internal.city.writeBlockEvents, {});
     }
+  },
+});
+
+/** What a real 311 complaint does to you when you step onto that block (small, a bit funny). */
+const BLOCK_MOODLETS: Record<string, { id: string; label: string; value: number }> = {
+  Rodent: { id: "block-rat", label: "Saw a rat the size of a cat", value: -3 },
+  "Noise - Residential": { id: "block-noise", label: "Someone's subwoofer, again", value: -2 },
+  "Noise - Street/Sidewalk": { id: "block-noise", label: "Block party you weren't invited to", value: -2 },
+  "Illegal Parking": { id: "block-parking", label: "Double-parked chaos", value: -1 },
+  "Blocked Driveway": { id: "block-parking", label: "A car is blocking everything", value: -1 },
+};
+
+/** Moodlets for arriving on a street, from that neighborhood's top 311 complaint right now. */
+export function arrivalMoodlets(city: Doc<"cityState"> | null, roomId: string, moodlets: Moodlet[], now: number): Moodlet[] {
+  const room = roomDef(roomId);
+  if (!city || !room || (room.kind !== "street" && room.kind !== "park")) return moodlets;
+  const top = city.blockEvents.items.find((i) => i.neighborhood === roomId);
+  const m = top ? BLOCK_MOODLETS[top.type] : undefined;
+  if (!m) return moodlets;
+  return upsertMoodlet(moodlets, { ...m, expiresAt: now + 3_600_000 }, now);
+}
+
+/**
+ * Hourly: in real cold weather, some basement rooms lose heat (PRD §6.5 building events).
+ * The super says he'll fix it tomorrow.
+ */
+export const heatCheck = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const city = await ctx.db
+      .query("cityState")
+      .withIndex("by_key", (q) => q.eq("key", KEY))
+      .unique();
+    if (!city || city.weather.tempF >= 45) return 0;
+    const now = Date.now();
+    const rows = await ctx.db.query("presence").take(1000);
+    let hit = 0;
+    for (const p of rows) {
+      if (!isHomeRoom(p.roomId) || Math.random() > 0.35) continue;
+      const c = await ctx.db.get(p.characterId);
+      if (!c) continue;
+      await ctx.db.patch(c._id, {
+        moodlets: upsertMoodlet(
+          c.moodlets,
+          { id: "heat-out", label: `Heat's out. It's ${Math.round(city.weather.tempF)}°F outside`, value: -12, expiresAt: now + 3 * 3_600_000 },
+          now,
+        ),
+      });
+      hit++;
+    }
+    return hit;
   },
 });

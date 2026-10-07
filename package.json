@@ -9,7 +9,7 @@
     "dev": "npm run dev --workspace=apps/web",
     "dev:convex": "convex dev",
     "build": "npm run build --workspace=apps/web",
-    "test": "npm run test --workspace=packages/game-core",
+    "test": "npm run test --workspace=packages/game-core && npm run test --workspace=packages/content",
     "typecheck": "tsc -p packages/game-core && tsc -p packages/content && tsc -p convex && npm run typecheck --workspace=apps/web",
     "lint": "npm run lint --workspace=apps/web"
   },

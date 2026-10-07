@@ -1,6 +1,6 @@
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { decayNeeds, type Needs, type RoomGrid } from "@nyl/game-core";
+import { decayNeeds, weatherNeedMultipliers, type Needs, type RoomGrid } from "@nyl/game-core";
 import { buildRoomLayout, roomDef, type Interactable, type RoomDef } from "@nyl/content";
 
 export async function characterByToken(ctx: QueryCtx | MutationCtx, token: string) {
@@ -26,9 +26,23 @@ export async function presenceOf(ctx: QueryCtx | MutationCtx, characterId: Id<"c
 /** More than this since the last heartbeat counts as offline: autopilot rules apply to the gap. */
 const OFFLINE_GAP_MS = 2 * 60_000;
 
-/** Needs at `now`, using the autopilot floor if the player was away. */
-export function currentNeeds(c: Doc<"characters">, now: number): Needs {
-  return decayNeeds(c.needs, c.needsUpdatedAt, now, { offline: now - c.lastSeenAt > OFFLINE_GAP_MS });
+export async function getCity(ctx: QueryCtx | MutationCtx) {
+  return await ctx.db
+    .query("cityState")
+    .withIndex("by_key", (q) => q.eq("key", "nyc"))
+    .unique();
+}
+
+/**
+ * Needs at `now`. Offline time uses the autopilot floor; online time feels the real weather.
+ * Pass the city state when you have it, to apply weather.
+ */
+export function currentNeeds(c: Doc<"characters">, now: number, city?: Doc<"cityState"> | null): Needs {
+  const offline = now - c.lastSeenAt > OFFLINE_GAP_MS;
+  return decayNeeds(c.needs, c.needsUpdatedAt, now, {
+    offline,
+    multipliers: offline ? undefined : weatherNeedMultipliers(city?.weather),
+  });
 }
 
 /**
@@ -81,7 +95,7 @@ export async function loadRoom(ctx: QueryCtx | MutationCtx, roomId: string): Pro
  * (phone slept, tab backgrounded). Returns null during a work shift.
  */
 export async function ensurePresence(ctx: MutationCtx, c: Doc<"characters">, now: number) {
-  if (c.roomId === "work") return null;
+  if (c.roomId === "work" || c.roomId === "transit") return null;
   const existing = await presenceOf(ctx, c._id);
   if (existing) return existing;
   const room = roomDef(c.roomId);

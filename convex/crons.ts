@@ -10,5 +10,6 @@ crons.interval("presence cleanup", { minutes: 1 }, internal.world.cleanupPresenc
 // Rent rolls over Sunday 8 PM New York time; hourly checks handle daylight saving without special cases.
 crons.interval("rent", { hours: 1 }, internal.bank.collectRent, {});
 crons.interval("autopilot shifts", { minutes: 15 }, internal.work.autopilotTick, {});
+crons.interval("heat outages in real cold", { hours: 1 }, internal.city.heatCheck, {});
 
 export default crons;

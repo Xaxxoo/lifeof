@@ -8,32 +8,36 @@ import { Color } from "three";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import {
+  ACTIONS,
   ITEM_BY_ID,
   buildRoomLayout,
+  goalTiles,
   normalizeLook,
   roomDef,
-  sideTiles,
   type ItemDef,
   type PlacedItem,
   type Prop,
   type RoomDef,
 } from "@nyl/content";
-import { daylight, findPath, findPathToAny, footprintTiles, nycTime, poseAt, tileAt, type MoveIntent } from "@nyl/game-core";
+import { daylight, findPath, findPathToAny, footprintTiles, nycTime, poseAt, tileAt, weatherKind, type MoveIntent } from "@nyl/game-core";
 import { playerMessage } from "@/lib/errors";
 import { serverNow, useGame } from "@/lib/store";
 import { ActionMenu } from "./ActionMenu";
 import { BuildPanel, type Ghost } from "./BuildPanel";
 import { Hud } from "./Hud";
-import { Phone } from "./Phone";
+import { Phone, type PhoneTab } from "./Phone";
 import { Avatar, type ActivityAnchor } from "./scene/Avatar";
 import { Furniture, FurniturePiece, type PlacedObject } from "./scene/Furniture";
-import { HomeRoom } from "./scene/HomeRoom";
+import { Interior } from "./scene/Interior";
 import { LabelProjector, anchorRef, useLabelAnchors } from "./scene/Labels";
+import { NpcAvatar, npcPosition } from "./scene/Npc";
+import { ParkGround } from "./scene/Park";
 import { Props, propLabelPos } from "./scene/Props";
 import { Street } from "./scene/Street";
 import { Weather } from "./scene/Weather";
 
 const BUBBLE_MS = 8_000;
+const NPC_LINE_EVERY_MS = 24_000;
 const NIGHT_SKY = new Color("#0b1020");
 const DAY_SKY = new Color("#a9d2ee");
 const NO_OBJECTS: PlacedObject[] = [];
@@ -41,6 +45,7 @@ const NO_OBJECTS: PlacedObject[] = [];
 export function World({ token, roomId }: { token: string; roomId: string }) {
   const room = useMemo(() => roomDef(roomId)!, [roomId]);
   const isHome = room.kind === "home";
+  const indoor = isHome || room.kind === "venue";
   const objects = (useQuery(api.world.objects, isHome ? { roomId } : "skip") as PlacedObject[] | undefined) ?? NO_OBJECTS;
   const layout = useMemo(() => buildRoomLayout(room, objects), [room, objects]);
 
@@ -63,10 +68,11 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
   const anchors = useLabelAnchors();
 
   const [menuKey, setMenuKey] = useState<string | null>(null);
-  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [phoneTab, setPhoneTab] = useState<PhoneTab | null>(null);
   const [buildMode, setBuildMode] = useState(false);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [npcSay, setNpcSay] = useState<{ id: string; text: string; until: number } | null>(null);
 
   const mine = occupants.find((o) => o.characterId === me?._id);
   const serverIntent: MoveIntent | null = mine ? { path: mine.path, startedAt: mine.startedAt } : null;
@@ -74,11 +80,14 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
   const myIntent =
     localIntent && (!serverIntent || localIntent.startedAt > serverIntent.startedAt + 250) ? localIntent : serverIntent;
   const standing = myIntent ? tileAt(myIntent, nowS) : null;
+  const gigStep = me?.gig && me.gig.roomId === roomId ? me.gig.steps[me.gig.step] : undefined;
 
-  const ghostValid = useMemo(
-    () => (ghost ? canPlace(room, objects, ghost, standing) : false),
-    [room, objects, ghost, standing],
-  );
+  const ghostValid = useMemo(() => (ghost ? canPlace(room, objects, ghost, standing) : false), [room, objects, ghost, standing]);
+
+  function closePanels() {
+    setMenuKey(null);
+    setPhoneTab(null);
+  }
 
   function walkTo(x: number, y: number) {
     if (!myIntent) return;
@@ -93,14 +102,21 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
       if (ghost) setGhost({ ...ghost, x, y });
       return;
     }
-    setMenuKey(null);
+    // Tapping a lawn or dance floor opens its menu; elsewhere you just walk.
+    const flat = room.props.find((p) => p.walkable && p.actions?.length && footprintTiles(p.x, p.y, p.w, p.h).some((t) => t.x === x && t.y === y));
+    if (flat && !menuKey) {
+      setPhoneTab(null);
+      setMenuKey(`prop:${flat.id}`);
+      return;
+    }
+    closePanels();
     walkTo(x, y);
   }
 
-  function onPickProp(p: Prop) {
+  function open(key: string) {
     if (buildMode) return;
-    setPhoneOpen(false);
-    setMenuKey(`prop:${p.id}`);
+    setPhoneTab(null);
+    setMenuKey(key);
   }
 
   function onPickObject(o: PlacedObject) {
@@ -108,23 +124,27 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
       if (!ghost) setSelectedId(o._id);
       return;
     }
-    const item = ITEM_BY_ID[o.itemId];
-    if (!item?.actions.length) return;
-    setPhoneOpen(false);
-    setMenuKey(`obj:${o._id}`);
+    if (ITEM_BY_ID[o.itemId]?.actions.length) open(`obj:${o._id}`);
   }
 
-  async function doAction(target: string, actionId: string) {
-    setMenuKey(null);
-    setPhoneOpen(false);
+  async function doAction(target: string, actionId: string, dest?: string) {
+    closePanels();
+    if (actionId === "ride_subway" && !dest) {
+      setPhoneTab("map");
+      return;
+    }
     const thing = layout.interactables.get(target);
     if (myIntent && thing) {
-      const path = findPathToAny(layout.grid, tileAt(myIntent, serverNow()), sideTiles(thing.tiles));
+      const path = findPathToAny(layout.grid, tileAt(myIntent, serverNow()), goalTiles(thing));
       if (path) setLocalIntent({ path, startedAt: serverNow() });
     }
     try {
-      const r = await start({ token, target, actionId });
-      if (r.trainDelayed) toast("Heads up: the L is delayed right now, in real life. You'll clock in late.", "info");
+      const r = await start({ token, target, actionId, dest });
+      if (r.trainDelayed) toast("Heads up: your line is delayed right now, in real life.", "info");
+      if (target.startsWith("npc:")) {
+        const npc = room.npcs?.find((n) => `npc:${n.id}` === target);
+        if (npc) setNpcSay({ id: npc.id, text: npc.lines[Math.floor(Math.random() * npc.lines.length)]!, until: serverNow() + 9000 });
+      }
     } catch (e) {
       setLocalIntent(null);
       toast(playerMessage(e), "error");
@@ -152,29 +172,34 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
   }
 
   const t = nycTime(now);
-  const light = isHome ? 0.85 : daylight(t);
+  const light = indoor ? 0.85 : daylight(t);
   const night = daylight(t) < 0.35;
-  const summary = city?.weather.summary ?? "";
-  const weatherKind = isHome ? null : /snow|flurr|sleet/i.test(summary) ? "snow" : /rain|shower|drizzle|storm/i.test(summary) ? "rain" : null;
+  const weather = indoor ? null : weatherKind(city?.weather.summary ?? "");
 
   const bubbles = new Map<string, string>();
   for (const m of messages) if (nowS - m._creationTime < BUBBLE_MS) bubbles.set(m.characterId, m.body);
 
   const menuThing = menuKey ? layout.interactables.get(menuKey) : null;
+  const menuActions = menuThing
+    ? [...menuThing.actions, ...(gigStep && gigStep.target === menuKey ? [gigStep.action] : [])]
+    : [];
   const selectedObj = selectedId ? objects.find((o) => o._id === selectedId) ?? null : null;
-  const lStatus = city?.subway.lines.find((l) => l.line === "L");
+  const stationLines = room.station?.lines ?? [];
+  const lineNote = stationLines
+    .map((l) => `${l}: ${city?.subway.lines.find((x) => x.line === l)?.status ?? "?"}`)
+    .join(" · ");
 
   return (
     <div className="fixed inset-0 touch-none select-none">
       <Canvas shadows dpr={[1, 2]}>
-        <SceneSky light={light} indoor={isHome} />
+        <SceneSky light={light} indoor={indoor} />
         <OrthographicCamera makeDefault position={[room.width / 2 + 20, 20, room.height / 2 + 20]} near={0.1} far={200} />
-        <CameraRig cx={room.width / 2} cz={room.height / 2} span={isHome ? room.width * 1.1 : room.width} />
-        <ambientLight intensity={isHome ? 0.7 : 0.35 + light * 0.55} />
+        <CameraRig cx={room.width / 2} cz={room.height / 2} span={indoor ? room.width * 1.1 : room.width} />
+        <ambientLight intensity={indoor ? 0.7 : 0.35 + light * 0.55} />
         <hemisphereLight args={["#bcd9ff", "#3a3226", 0.25 + light * 0.35]} />
         <directionalLight
           position={[room.width + 6, 16, room.height + 4]}
-          intensity={isHome ? 0.9 : 0.15 + light * 1.4}
+          intensity={indoor ? 0.8 : 0.15 + light * 1.4}
           castShadow
           shadow-mapSize={[1024, 1024]}
           shadow-camera-left={-14}
@@ -182,25 +207,24 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
           shadow-camera-top={14}
           shadow-camera-bottom={-14}
         />
-        {isHome ? (
+        {indoor ? (
           <>
-            <HomeRoom room={room} night={night} onTileClick={onTileClick} onDoorClick={() => !buildMode && setMenuKey("prop:door")} />
-            <pointLight position={[room.width / 2, 2.3, room.height / 2]} intensity={night ? 8 : 3} distance={10} color="#ffd9a0" />
+            <Interior room={room} night={night} onTileClick={onTileClick} onDoorClick={() => open("prop:door")} />
+            <pointLight position={[room.width / 2, 2.4, room.height / 2]} intensity={night || room.kind === "venue" ? 8 : 3} distance={12} color={room.theme?.light ?? "#ffd9a0"} />
           </>
+        ) : room.kind === "park" ? (
+          <ParkGround room={room} onTileClick={onTileClick} />
         ) : (
-          <>
-            <Street room={room} onTileClick={onTileClick} />
-            <Props room={room} night={night} onPick={onPickProp} />
-          </>
+          <Street room={room} onTileClick={onTileClick} />
         )}
-        <Furniture
-          objects={objects}
-          onPick={onPickObject}
-          highlight={ghost?.objectId ?? (buildMode ? selectedId : null)}
-        />
+        {!isHome && <Props room={room} night={night} onPick={(p: Prop) => open(`prop:${p.id}`)} />}
+        {isHome && <Furniture objects={objects} onPick={onPickObject} highlight={ghost?.objectId ?? (buildMode ? selectedId : null)} />}
         {ghost && ITEM_BY_ID[ghost.itemId] && (
           <FurniturePiece item={ITEM_BY_ID[ghost.itemId]!} x={ghost.x} y={ghost.y} rot={ghost.rot} ghost valid={ghostValid} />
         )}
+        {(room.npcs ?? []).map((n) => (
+          <NpcAvatar key={n.id} npc={n} onPick={() => open(`npc:${n.id}`)} />
+        ))}
         {occupants.map((o) => {
           const isMe = o.characterId === me?._id;
           return (
@@ -213,19 +237,51 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
             />
           );
         })}
-        <Weather kind={weatherKind} width={room.width} depth={room.height} />
+        <Weather kind={weather} width={room.width} depth={room.height} />
         <LabelProjector anchors={anchors} />
       </Canvas>
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {!isHome &&
           room.props
-            .filter((p) => p.label)
-            .map((p) => (
-              <div key={p.id} ref={anchorRef(anchors, `prop:${p.id}`, () => propLabelPos(p))} className="absolute left-0 top-0">
-                <div className="whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">{p.label}</div>
-              </div>
-            ))}
+            .filter((p) => p.label && p.kind !== "door")
+            .map((p) => {
+              const isGig = gigStep?.target === `prop:${p.id}`;
+              return (
+                <div key={p.id} ref={anchorRef(anchors, `prop:${p.id}`, () => propLabelPos(p))} className="absolute left-0 top-0 flex flex-col items-center gap-1">
+                  {isGig && (
+                    <div className="animate-bounce whitespace-nowrap rounded-full bg-[#f3a712] px-2 py-0.5 text-[11px] font-bold text-black shadow-lg">
+                      📦 {gigStep!.label}
+                    </div>
+                  )}
+                  <div className={`whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold ${isGig ? "bg-[#f3a712] text-black" : "bg-black/70 text-white"}`}>
+                    {p.label}
+                  </div>
+                </div>
+              );
+            })}
+        {(room.npcs ?? []).map((n, i) => {
+          const said = npcSay && npcSay.id === n.id && nowS < npcSay.until ? npcSay.text : null;
+          // Each NPC says something every so often, staggered, on the shared clock.
+          const slot = Math.floor((nowS + i * 7000) / NPC_LINE_EVERY_MS);
+          const ambient = (nowS + i * 7000) % NPC_LINE_EVERY_MS < 7000 ? n.lines[slot % n.lines.length] : null;
+          const line = said ?? ambient;
+          return (
+            <div
+              key={n.id}
+              ref={anchorRef(anchors, `npc:${n.id}`, (tNow) => {
+                const p = npcPosition(n, tNow);
+                return [p.x + 0.5, 1.85, p.y + 0.5];
+              })}
+              className="absolute left-0 top-0 flex flex-col items-center gap-1"
+            >
+              {line && (
+                <div className="w-max max-w-[170px] rounded-xl bg-white/95 px-2 py-1 text-center text-[11px] leading-tight text-black shadow">{line}</div>
+              )}
+              <div className="whitespace-nowrap rounded-full bg-violet-600/80 px-1.5 text-[10px] font-semibold text-white">{n.name}</div>
+            </div>
+          );
+        })}
         {occupants.map((o) => {
           const isMe = o.characterId === me?._id;
           const intent = isMe && myIntent ? myIntent : { path: o.path, startedAt: o.startedAt };
@@ -243,9 +299,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
               className="absolute left-0 top-0 flex flex-col items-center gap-1"
             >
               {bubble && (
-                <div className="w-max max-w-[180px] rounded-xl bg-white px-2 py-1 text-center text-[11px] leading-tight text-black shadow">
-                  {bubble}
-                </div>
+                <div className="w-max max-w-[180px] rounded-xl bg-white px-2 py-1 text-center text-[11px] leading-tight text-black shadow">{bubble}</div>
               )}
               {acting && <div className="whitespace-nowrap rounded-full bg-sky-500/90 px-1.5 text-[10px] font-semibold text-white">{acting}</div>}
               <div className={`whitespace-nowrap rounded-full px-1.5 text-[10px] font-semibold ${isMe ? "bg-[#f3a712] text-black" : "bg-black/60 text-white"}`}>
@@ -264,40 +318,50 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
         clockLabel={t.label}
         online={occupants.length}
         place={isHome ? "Your basement room · Crown Heights" : `${room.name} · ${room.neighborhood}`}
+        neighborhoodId={room.kind === "street" || room.kind === "park" ? room.id : room.exitTo?.roomId ?? null}
         isHome={isHome}
         buildMode={buildMode}
         onToggleBuild={() => {
           setBuildMode((b) => !b);
           setGhost(null);
           setSelectedId(null);
-          setMenuKey(null);
-          setPhoneOpen(false);
+          closePanels();
         }}
         onOpenPhone={() => {
-          setPhoneOpen((p) => !p);
           setMenuKey(null);
+          setPhoneTab((p) => (p ? null : "map"));
         }}
-        hideBottomPanels={buildMode || phoneOpen || !!menuThing}
+        hideBottomPanels={buildMode || !!phoneTab || !!menuThing}
       />
 
       {menuThing && menuKey && (
         <ActionMenu
           title={menuThing.label}
-          actionIds={menuThing.actions}
+          actionIds={menuActions.filter((id) => ACTIONS[id])}
           onChoose={(id) => void doAction(menuKey, id)}
           onClose={() => setMenuKey(null)}
           note={
-            menuThing.actions.includes("go_to_work")
-              ? me?.job
-                ? `L train right now: ${lStatus?.status === "good" ? "running normally" : lStatus?.status ?? "unknown"}.`
-                : "No job yet. Open Phone → Jobs."
-              : undefined
+            menuThing.actions.includes("ride_subway")
+              ? `Live: ${lineNote}${me?.job ? "" : ". No job yet: Phone → Jobs."}`
+              : menuKey.startsWith("npc:")
+                ? room.npcs?.find((n) => `npc:${n.id}` === menuKey)?.origin === me?.origin
+                  ? "You're from the same place."
+                  : undefined
+                : undefined
           }
         />
       )}
 
-      {phoneOpen && me && (
-        <Phone token={token} me={me} onClose={() => setPhoneOpen(false)} onCallHome={() => void doAction("phone", "call_home")} />
+      {phoneTab && me && (
+        <Phone
+          token={token}
+          me={me}
+          city={city ?? null}
+          initialTab={phoneTab}
+          onClose={() => setPhoneTab(null)}
+          onCallHome={() => void doAction("phone", "call_home")}
+          onRide={(dest) => void doAction("prop:subway", "ride_subway", dest)}
+        />
       )}
 
       {buildMode && me && (
@@ -342,13 +406,14 @@ function anchorFor(
   if (!activity) return null;
   const thing = interactables.get(activity.target);
   const pose = (activity.pose as ActivityAnchor["pose"]) ?? "stand";
-  const seated = pose !== "stand" && thing?.seat;
+  // On a lawn or dance floor you stay where you walked to; on furniture you snap to the seat.
+  const seated = pose !== "stand" && thing?.seat && !thing.walkOn;
   return {
     startsAt: activity.startsAt,
     active: nowS >= activity.startsAt,
-    pose: seated ? pose : "stand",
+    pose: seated || (thing?.walkOn && pose !== "stand") ? pose : "stand",
     at: seated ? thing!.seat : null,
-    faceTo: thing && !seated ? thing.center : null,
+    faceTo: thing && !seated && !thing.walkOn ? thing.center : null,
   };
 }
 

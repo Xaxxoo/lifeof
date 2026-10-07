@@ -44,7 +44,7 @@ export const moodlet = v.object({ id: v.string(), label: v.string(), value: v.nu
 export const activity = v.object({
   id: v.string(),
   actionId: v.string(),
-  kind: v.union(v.literal("use"), v.literal("travel"), v.literal("work")),
+  kind: v.union(v.literal("use"), v.literal("travel"), v.literal("work"), v.literal("ride")),
   roomId: v.string(),
   target: v.string(),
   startsAt: v.number(),
@@ -56,6 +56,23 @@ export const activity = v.object({
   /** Work only: mood multiplier at clock-in and whether the real L delay excused a late start. */
   moodMultiplier: v.optional(v.number()),
   trainDelayed: v.optional(v.boolean()),
+  /** Rides: the moment on the train, whether the player tipped, and the lines taken. */
+  rideMoment: v.optional(v.string()),
+  tipped: v.optional(v.boolean()),
+  rideLines: v.optional(v.array(v.string())),
+});
+
+/** A gig in progress: a short list of stops on the current block (PRD §6.4). */
+export const gig = v.object({
+  id: v.string(),
+  gigId: v.string(),
+  roomId: v.string(),
+  steps: v.array(v.object({ target: v.string(), label: v.string(), action: v.string() })),
+  step: v.number(),
+  pay: v.number(),
+  tip: v.number(),
+  startedAt: v.number(),
+  deadline: v.number(),
 });
 
 const lineStatus = v.object({
@@ -82,7 +99,7 @@ export default defineSchema({
     lastSeenAt: v.number(),
     skills,
     moodlets: v.array(moodlet),
-    /** Where the character is: a room id, or "work" during a shift. */
+    /** Where the character is: a room id, "work" during a shift, or "transit" on the subway. */
     roomId: v.string(),
     activity: v.optional(activity),
     job: v.optional(
@@ -91,6 +108,8 @@ export default defineSchema({
     /** Shifts worked in the current rent period (student visa cap). */
     shiftWeek: v.object({ period: v.string(), count: v.number() }),
     autopilotDay: v.optional(v.string()),
+    gig: v.optional(gig),
+    gigStats: v.optional(v.object({ done: v.number(), rating: v.number() })),
     rent: v.object({ perWeek: v.number(), lastPeriod: v.string(), owed: v.number(), missedWeeks: v.number() }),
   })
     .index("by_token", ["token"])
@@ -157,7 +176,8 @@ export default defineSchema({
       lastLiveAt: v.number(),
     }),
     blockEvents: v.object({
-      items: v.array(v.object({ type: v.string(), count: v.number() })),
+      /** Borough-wide items have no neighborhood; per-block items name their room id. */
+      items: v.array(v.object({ type: v.string(), count: v.number(), neighborhood: v.optional(v.string()) })),
       source: v.union(v.literal("live"), v.literal("simulated")),
       updatedAt: v.number(),
       lastLiveAt: v.number(),

@@ -8,6 +8,7 @@ import { useGame } from "@/lib/store";
 import { CreateCharacter } from "./CreateCharacter";
 import { Splash } from "./GameLoader";
 import { Toasts } from "./Toasts";
+import { SubwayRide } from "./SubwayRide";
 import { WorkScreen } from "./WorkScreen";
 import { World } from "./World";
 
@@ -54,10 +55,16 @@ function Session({ token }: { token: string }) {
   // A new room means a new scene; drop any optimistic path from the old one.
   useEffect(() => setLocalIntent(null), [roomId, setLocalIntent]);
 
-  if (!joined || !roomId) return <Splash note="Taking the L to Bushwick…" />;
+  if (!joined || !roomId) return <Splash note="Heading to Crown Heights…" />;
   return (
     <>
-      {roomId === "work" ? <WorkScreen token={token} /> : <World key={roomId} token={token} roomId={roomId} />}
+      {roomId === "work" ? (
+        <WorkScreen token={token} />
+      ) : roomId === "transit" ? (
+        <SubwayRide token={token} />
+      ) : (
+        <World key={roomId} token={token} roomId={roomId} />
+      )}
       <Toasts />
     </>
   );

@@ -12,8 +12,11 @@ import {
   moodBand,
   NEED_KEYS,
   needsDuringActivity,
+  weatherEffectText,
+  weatherNeedMultipliers,
   type NeedKey,
 } from "@nyl/game-core";
+import { GIG_BY_ID, ROOMS } from "@nyl/content";
 import { playerMessage } from "@/lib/errors";
 import { useGame } from "@/lib/store";
 
@@ -46,6 +49,7 @@ interface HudProps {
   clockLabel: string;
   online: number;
   place: string;
+  neighborhoodId: string | null;
   isHome: boolean;
   buildMode: boolean;
   onToggleBuild: () => void;
@@ -61,6 +65,7 @@ export function Hud({
   clockLabel,
   online,
   place,
+  neighborhoodId,
   isHome,
   buildMode,
   onToggleBuild,
@@ -75,7 +80,13 @@ export function Hud({
   // Re-render every second so timers and need bars move.
   const nowS = useNow(1000) + clockOffset;
 
-  const needs = me ? needsDuringActivity(decayNeeds(me.needs, me.needsUpdatedAt, nowS), me.activity, nowS) : null;
+  const needs = me
+    ? needsDuringActivity(decayNeeds(me.needs, me.needsUpdatedAt, nowS, { multipliers: weatherNeedMultipliers(city?.weather) }), me.activity, nowS)
+    : null;
+  const gig = me?.gig;
+  const gigDef = gig ? GIG_BY_ID[gig.gigId] : undefined;
+  const gigStep = gig?.steps[gig.step];
+  const gigPlace = gig && gigStep ? ROOMS[gig.roomId]?.props.find((p) => `prop:${p.id}` === gigStep.target)?.label : undefined;
   const moodlets = activeMoodlets(me?.moodlets, nowS);
   const mood = needs ? computeMood(needs, moodlets, nowS) : 0;
   const act = me?.activity && me.activity.kind === "use" ? me.activity : null;
@@ -120,10 +131,20 @@ export function Hud({
         </div>
       </div>
 
-      {todayOpen && city && <TodayCard city={city} onClose={() => setTodayOpen(false)} />}
+      {todayOpen && city && <TodayCard city={city} neighborhoodId={neighborhoodId} onClose={() => setTodayOpen(false)} />}
 
       {/* Bottom: activity, mood, chat, phone */}
       <div className="absolute inset-x-0 bottom-0 z-20 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {gig && gigStep && !hideBottomPanels && (
+          <div className="mx-auto mb-2 flex max-w-md items-center gap-2 rounded-xl bg-[#f3a712]/95 px-3 py-2 text-black">
+            <span className="text-base">{gigDef?.emoji}</span>
+            <p className="min-w-0 flex-1 truncate text-xs font-semibold">
+              {gigDef?.app}: {gigStep.label} at {gigPlace ?? "the marked spot"}
+              {gig.roomId !== roomId ? ` (${ROOMS[gig.roomId]?.neighborhood})` : ""}
+            </p>
+            <span className="text-[11px] font-semibold tabular-nums">{fmt(Math.max(0, gig.deadline - nowS))}</span>
+          </div>
+        )}
         {act && !hideBottomPanels && (
           <div className="mx-auto mb-2 flex max-w-md items-center gap-3 rounded-xl bg-black/75 px-3 py-2 backdrop-blur">
             <div className="min-w-0 flex-1">
@@ -204,8 +225,12 @@ export function Hud({
   );
 }
 
-function TodayCard({ city, onClose }: { city: Doc<"cityState">; onClose: () => void }) {
+function TodayCard({ city, neighborhoodId, onClose }: { city: Doc<"cityState">; neighborhoodId: string | null; onClose: () => void }) {
   const lines = city.subway.lines;
+  const effect = weatherEffectText(city.weather);
+  const here = neighborhoodId ? ROOMS[neighborhoodId] : undefined;
+  const local = city.blockEvents.items.filter((i) => i.neighborhood === neighborhoodId);
+  const borough = city.blockEvents.items.filter((i) => !i.neighborhood);
   return (
     <div className="absolute inset-x-3 top-24 z-10 mx-auto max-h-[60vh] max-w-md overflow-y-auto rounded-2xl bg-[#171a22]/95 p-4 shadow-2xl backdrop-blur">
       <div className="flex items-center justify-between">
@@ -251,6 +276,7 @@ function TodayCard({ city, onClose }: { city: Doc<"cityState">; onClose: () => v
           {Math.round(city.weather.tempF)}°F, {city.weather.summary.toLowerCase()}, {city.weather.precipChance}% chance of
           rain.
         </p>
+        {effect && <p className="mt-1 text-xs text-sky-300">{effect}</p>}
         {city.weather.alerts.map((a) => (
           <p key={a} className="mt-1 text-xs font-semibold text-amber-300">
             {a}
@@ -258,8 +284,8 @@ function TodayCard({ city, onClose }: { city: Doc<"cityState">; onClose: () => v
         ))}
       </Section>
 
-      <Section title="On the block (311)" source={city.blockEvents.source}>
-        {city.blockEvents.items.slice(0, 4).map((e) => (
+      <Section title={here ? `311 in ${here.neighborhood}` : "311 in Brooklyn"} source={city.blockEvents.source}>
+        {(local.length ? local : borough).slice(0, 4).map((e) => (
           <p key={e.type} className="text-xs text-white/80">
             {COMPLAINT_COPY[e.type] ?? e.type} <span className="text-white/45">· {e.count} reports</span>
           </p>

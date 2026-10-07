@@ -15,7 +15,7 @@ export const join = mutation({
     const c = await requireCharacter(ctx, token);
     const now = Date.now();
     await ctx.db.patch(c._id, { needs: currentNeeds(c, now), needsUpdatedAt: now, lastSeenAt: now });
-    if (c.roomId === "work") return { serverNow: now, roomId: "work" };
+    if (c.roomId === "work" || c.roomId === "transit") return { serverNow: now, roomId: c.roomId };
 
     const roomId = roomDef(c.roomId) ? c.roomId : STREET_ID;
     const existing = await presenceOf(ctx, c._id);
@@ -37,6 +37,7 @@ export const move = mutation({
   handler: async (ctx, { token, target }) => {
     const c = await requireCharacter(ctx, token);
     if (c.roomId === "work") throw new Error("You're at work");
+    if (c.roomId === "transit") throw new Error("You're on the train");
     const now = Date.now();
     if (c.activity) await cancelActivity(ctx, c, now);
     const p = await ensurePresence(ctx, (await ctx.db.get(c._id))!, now);

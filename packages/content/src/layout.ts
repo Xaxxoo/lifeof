@@ -18,6 +18,10 @@ export interface Interactable {
   /** Where a sitting or sleeping avatar goes, and how high (null = stand beside it). */
   seat: { x: number; z: number; y: number } | null;
   center: { x: number; z: number };
+  /** Walk onto it (lawn, dance floor) rather than up to it. */
+  walkOn?: boolean;
+  tags?: string[];
+  kind: "prop" | "object" | "npc";
 }
 
 const SEAT_HEIGHT: Record<string, number> = {
@@ -46,18 +50,35 @@ export function buildRoomLayout(room: RoomDef, objects: PlacedItem[]): { grid: R
 
   for (const p of room.props) {
     const tiles = footprintTiles(p.x, p.y, p.w, p.h);
-    for (const t of tiles) blocked.add(`${t.x},${t.y}`);
-    if (p.actions?.length) {
+    if (!p.walkable) for (const t of tiles) blocked.add(`${t.x},${t.y}`);
+    if (p.actions?.length || p.tags?.length) {
       const center = centerOf(tiles);
       interactables.set(`prop:${p.id}`, {
         key: `prop:${p.id}`,
         label: p.label ?? p.kind,
         tiles,
-        actions: p.actions,
+        actions: p.actions ?? [],
         center,
-        seat: p.kind === "bench" ? { ...center, y: 0.32 } : null,
+        seat: p.kind === "bench" || p.kind === "stool" ? { ...center, y: p.kind === "stool" ? 0.5 : 0.32 } : p.walkable ? { ...center, y: 0.02 } : null,
+        walkOn: p.walkable,
+        tags: p.tags,
+        kind: "prop",
       });
     }
+  }
+  for (const n of room.npcs ?? []) {
+    if (n.patrol) continue;
+    const tiles = [{ x: n.x, y: n.y }];
+    blocked.add(`${n.x},${n.y}`);
+    interactables.set(`npc:${n.id}`, {
+      key: `npc:${n.id}`,
+      label: `${n.name} · ${n.role}`,
+      tiles,
+      actions: n.origin ? ["chat_npc", "talk_home"] : ["chat_npc"],
+      center: centerOf(tiles),
+      seat: null,
+      kind: "npc",
+    });
   }
   for (const o of objects) {
     const item = ITEM_BY_ID[o.itemId];
@@ -74,10 +95,16 @@ export function buildRoomLayout(room: RoomDef, objects: PlacedItem[]): { grid: R
         actions: item.actions,
         center,
         seat: h ? { ...center, y: h } : null,
+        kind: "object",
       });
     }
   }
   return { grid: { width: room.width, height: room.height, blocked }, interactables };
+}
+
+/** Where to walk to use something: onto it for lawns and dance floors, beside it otherwise. */
+export function goalTiles(thing: Pick<Interactable, "tiles" | "walkOn">): Tile[] {
+  return thing.walkOn ? thing.tiles : sideTiles(thing.tiles);
 }
 
 /** Tiles next to a footprint (not inside it), as walking goals. */

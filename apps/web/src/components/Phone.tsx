@@ -5,14 +5,46 @@ import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Doc } from "@convex/_generated/dataModel";
 import { SKILL_KEYS, activeMoodlets, rentPeriodKey, skillLevel, skillProgress } from "@nyl/game-core";
-import { CAREERS, FOOD_CAREER, ORIGINS, STATUSES, STUDENT_SHIFTS_PER_WEEK } from "@nyl/content";
+import {
+  CAREERS,
+  DELAY_CAP,
+  FOOD_CAREER,
+  GIG_BY_ID,
+  GIG_WINDOW_MS,
+  NEIGHBORHOOD_MAP,
+  ORIGINS,
+  ROOMS,
+  STATUSES,
+  STREETS,
+  STUDENT_SHIFTS_PER_WEEK,
+  SUBWAY_FARE,
+  roomDef,
+  route,
+} from "@nyl/content";
+import { LineBullet, lineColor } from "./LineBullet";
 import { playerMessage } from "@/lib/errors";
 import { serverNow, useGame } from "@/lib/store";
 
-type Tab = "jobs" | "bank" | "me";
+export type PhoneTab = "map" | "gigs" | "jobs" | "bank" | "me";
 
-export function Phone({ token, me, onClose, onCallHome }: { token: string; me: Doc<"characters">; onClose: () => void; onCallHome: () => void }) {
-  const [tab, setTab] = useState<Tab>("jobs");
+export function Phone({
+  token,
+  me,
+  city,
+  initialTab = "map",
+  onClose,
+  onCallHome,
+  onRide,
+}: {
+  token: string;
+  me: Doc<"characters">;
+  city: Doc<"cityState"> | null;
+  initialTab?: PhoneTab;
+  onClose: () => void;
+  onCallHome: () => void;
+  onRide: (dest: string) => void;
+}) {
+  const [tab, setTab] = useState<PhoneTab>(initialTab);
   const origin = ORIGINS.find((o) => o.id === me.origin);
   const home = origin?.name.split(",")[0] ?? "home";
 
@@ -25,7 +57,7 @@ export function Phone({ token, me, onClose, onCallHome }: { token: string; me: D
         </button>
       </div>
       <div className="mt-2 flex gap-1 px-3">
-        {(["jobs", "bank", "me"] as Tab[]).map((t) => (
+        {(["map", "gigs", "jobs", "bank", "me"] as PhoneTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -36,6 +68,8 @@ export function Phone({ token, me, onClose, onCallHome }: { token: string; me: D
         ))}
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3">
+        {tab === "map" && <MapApp me={me} city={city} onRide={onRide} />}
+        {tab === "gigs" && <Gigs token={token} me={me} />}
         {tab === "jobs" && <Jobs token={token} me={me} />}
         {tab === "bank" && <Bank token={token} me={me} />}
         {tab === "me" && <Me me={me} />}
@@ -207,4 +241,155 @@ function Me({ me }: { me: Doc<"characters"> }) {
       )}
     </div>
   );
+}
+
+/** Brooklyn map: where you are, live line status, and a ride to anywhere from your block's station. */
+function MapApp({ me, city, onRide }: { me: Doc<"characters">; city: Doc<"cityState"> | null; onRide: (dest: string) => void }) {
+  const here = roomDef(me.roomId);
+  const street = here?.station ? here : here?.exitTo ? roomDef(here.exitTo.roomId) : null;
+  const canRide = !!here?.station;
+  const status = (line: string) => city?.subway.lines.find((l) => l.line === line)?.status ?? "good";
+  const W = 260;
+  const H = 230;
+  const px = (x: number) => 20 + (x / 6) * (W - 40);
+  const py = (y: number) => 16 + (y / 7.6) * (H - 32);
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-2xl bg-[#1a2230]">
+        <path d={`M ${px(0)} ${py(0.4)} C ${px(-0.3)} ${py(3)}, ${px(0.4)} ${py(7)}, ${px(1)} ${py(7.6)}`} stroke="#3b6ea5" strokeWidth="10" fill="none" opacity="0.5" />
+        {STREETS.map((s) => {
+          const p = NEIGHBORHOOD_MAP[s.id]!;
+          const isHere = street?.id === s.id;
+          return (
+            <g key={s.id}>
+              <circle cx={px(p.x)} cy={py(p.y)} r={isHere ? 9 : 6} fill={isHere ? "#f3a712" : "#e5e7eb"} />
+              <text x={px(p.x)} y={py(p.y) + (isHere ? 21 : 17)} textAnchor="middle" fontSize="9" fill="#e5e7eb">
+                {s.neighborhood}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <p className="mt-2 text-xs text-white/60">
+        You&apos;re in <span className="font-semibold text-white">{here?.neighborhood ?? "Brooklyn"}</span>
+        {here && here.kind !== "street" && here.kind !== "park" ? ` (${here.name})` : ""}.
+        {canRide ? ` Fare $${SUBWAY_FARE}.` : " Head outside to the subway to ride."}
+      </p>
+      <div className="mt-3 space-y-1.5">
+        {STREETS.filter((s) => s.id !== street?.id).map((s) => {
+          const r = street ? route(street.id, s.id) : null;
+          const late = r?.lines.some((l) => status(l) === "delays" || status(l) === "suspended");
+          const secs = r ? Math.round((r.baseMs * (late ? 1 + DELAY_CAP : 1)) / 1000) : null;
+          return (
+            <div key={s.id} className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2">
+              <div className="flex gap-1">
+                {s.station!.lines.map((l) => (
+                  <LineBullet key={l} line={l} size={18} status={status(l)} />
+                ))}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold">{s.neighborhood}</p>
+                <p className="truncate text-[11px] text-white/50">
+                  {secs ? `${secs}s ride${r!.transfers ? " · 1 transfer" : ""}${late ? " · delayed (real)" : ""}` : s.station!.name}
+                </p>
+              </div>
+              <button
+                disabled={!canRide}
+                onClick={() => onRide(s.id)}
+                className="rounded-full px-3 py-1 text-[11px] font-semibold text-black disabled:opacity-30"
+                style={{ backgroundColor: lineColor(r?.lines[0] ?? s.station!.lines[0]!) }}
+              >
+                Ride
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Gigs({ token, me }: { token: string; me: Doc<"characters"> }) {
+  const [window] = useState(() => Math.floor(serverNow() / GIG_WINDOW_MS));
+  const offers = useQuery(api.gigs.offers, { token, window }) ?? [];
+  const accept = useMutation(api.gigs.accept);
+  const cancel = useMutation(api.gigs.cancel);
+  const toast = useGame((s) => s.toast);
+  const stats = me.gigStats;
+
+  if (me.gig) {
+    const def = GIG_BY_ID[me.gig.gigId];
+    const left = Math.max(0, me.gig.deadline - serverNow());
+    return (
+      <div>
+        <div className="rounded-2xl bg-white/5 p-3">
+          <p className="text-sm font-semibold">
+            {def?.emoji} {def?.app}: {def?.name}
+          </p>
+          <p className="text-xs text-white/60">
+            ${me.gig.pay} + tip · {left > 0 ? `${Math.ceil(left / 60000)} min left for full tip` : "Late: tip cut"}
+          </p>
+          <ol className="mt-3 space-y-1.5">
+            {me.gig.steps.map((st, i) => {
+              const place = ROOMS[me.gig!.roomId] ? labelFor(me.gig!.roomId, st.target) : st.target;
+              return (
+                <li key={i} className={`text-xs ${i < me.gig!.step ? "text-white/35 line-through" : i === me.gig!.step ? "font-semibold text-[#f3a712]" : "text-white/70"}`}>
+                  {i + 1}. {st.label} at {place}
+                </li>
+              );
+            })}
+          </ol>
+          <p className="mt-3 text-[11px] text-white/50">Tap the highlighted place on the street to do the next step.</p>
+        </div>
+        <button onClick={() => void cancel({ token })} className="mt-3 text-xs text-white/40 underline">
+          Cancel gig (hurts your rating)
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-white/50">
+        Gigs near you{stats ? ` · ${stats.done} done · ${stats.rating.toFixed(1)}★` : ""}. Real rain doubles delivery tips.
+      </p>
+      {offers.length === 0 && <p className="mt-3 text-xs text-white/60">No gigs here. Head out to a street or the park.</p>}
+      <div className="mt-2 space-y-2">
+        {offers.map((o) => (
+          <div key={o.offerId} className="rounded-2xl bg-white/5 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">
+                {o.emoji} {o.app}
+              </p>
+              <p className="text-sm font-semibold">${o.pay}+</p>
+            </div>
+            <p className="text-xs text-white/60">
+              {o.name} · {o.steps.map((s) => s.place).join(" → ")} · {o.minutes} min
+            </p>
+            {o.locked ? (
+              <p className="mt-2 text-xs text-amber-300">{o.locked}</p>
+            ) : (
+              <button
+                onClick={() =>
+                  accept({ token, offerId: o.offerId })
+                    .then(() => toast(`${o.app} gig accepted. Go!`, "good"))
+                    .catch((e) => toast(playerMessage(e), "error"))
+                }
+                className="mt-2 w-full rounded-xl bg-[#f3a712] py-1.5 text-xs font-semibold text-black"
+              >
+                Accept
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function labelFor(roomId: string, target: string) {
+  const room = ROOMS[roomId];
+  const prop = room?.props.find((p) => `prop:${p.id}` === target);
+  return prop?.label ?? target;
 }

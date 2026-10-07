@@ -16,8 +16,10 @@ import type * as city from "../city.js";
 import type * as crons from "../crons.js";
 import type * as dev from "../dev.js";
 import type * as feeds from "../feeds.js";
+import type * as gigs from "../gigs.js";
 import type * as lib from "../lib.js";
 import type * as play from "../play.js";
+import type * as transit from "../transit.js";
 import type * as work from "../work.js";
 import type * as world from "../world.js";
 
@@ -36,8 +38,10 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   dev: typeof dev;
   feeds: typeof feeds;
+  gigs: typeof gigs;
   lib: typeof lib;
   play: typeof play;
+  transit: typeof transit;
   work: typeof work;
   world: typeof world;
 }>;

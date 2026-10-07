@@ -3,8 +3,8 @@
 import type { ThreeEvent } from "@react-three/fiber";
 import type { RoomDef } from "@nyl/content";
 
-/** The basement room shell: floor, two back walls, a high window and the door. */
-export function HomeRoom({
+/** Any indoor room (home or venue): floorboards, two back walls, and the door on the west wall. */
+export function Interior({
   room,
   night,
   onTileClick,
@@ -17,7 +17,8 @@ export function HomeRoom({
 }) {
   const W = room.width;
   const H = room.height;
-  const wallH = 2.6;
+  const wallH = 2.8;
+  const theme = room.theme ?? { floor: "#a47d55", floorAlt: "#9c7650", wall: "#d9cfc0", light: "#ffd9a0" };
   const handle = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     const x = Math.floor(e.point.x);
@@ -28,36 +29,42 @@ export function HomeRoom({
 
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} position={[W / 2, 0.001, H / 2]} onClick={handle} visible={false}>
+      <mesh rotation-x={-Math.PI / 2} position={[W / 2, 0.03, H / 2]} onClick={handle} visible={false}>
         <planeGeometry args={[W, H]} />
         <meshBasicMaterial />
       </mesh>
-      {/* Floorboards */}
       {Array.from({ length: W }, (_, i) => (
         <mesh key={i} rotation-x={-Math.PI / 2} position={[i + 0.5, 0, H / 2]} receiveShadow>
           <planeGeometry args={[0.98, H]} />
-          <meshStandardMaterial color={i % 2 ? "#a47d55" : "#9c7650"} />
+          <meshStandardMaterial color={i % 2 ? theme.floor : theme.floorAlt} />
         </mesh>
       ))}
-      {/* North wall with a high basement window */}
       <mesh position={[W / 2, wallH / 2, -0.05]} receiveShadow>
         <boxGeometry args={[W, wallH, 0.1]} />
-        <meshStandardMaterial color="#d9cfc0" />
+        <meshStandardMaterial color={theme.wall} />
       </mesh>
-      <mesh position={[W / 2 + 1, wallH - 0.5, 0.01]}>
-        <planeGeometry args={[1.6, 0.5]} />
-        <meshStandardMaterial color={night ? "#1b2438" : "#bfe0f5"} emissive={night ? "#000" : "#9fd0f0"} emissiveIntensity={0.4} />
-      </mesh>
-      {/* West wall */}
       <mesh position={[-0.05, wallH / 2, H / 2]} receiveShadow>
         <boxGeometry args={[0.1, wallH, H]} />
-        <meshStandardMaterial color="#cfc4b3" />
+        <meshStandardMaterial color={theme.wall} />
       </mesh>
-      {/* Exposed pipe, because basement */}
-      <mesh position={[W / 2, wallH - 0.15, 0.15]} rotation-z={Math.PI / 2}>
-        <cylinderGeometry args={[0.05, 0.05, W, 8]} />
-        <meshStandardMaterial color="#8a8a8a" metalness={0.5} />
-      </mesh>
+      {room.kind === "home" ? (
+        <>
+          <mesh position={[W / 2 + 1, wallH - 0.6, 0.01]}>
+            <planeGeometry args={[1.6, 0.5]} />
+            <meshStandardMaterial color={night ? "#1b2438" : "#bfe0f5"} emissive={night ? "#000" : "#9fd0f0"} emissiveIntensity={0.4} />
+          </mesh>
+          <mesh position={[W / 2, wallH - 0.15, 0.15]} rotation-z={Math.PI / 2}>
+            <cylinderGeometry args={[0.05, 0.05, W, 8]} />
+            <meshStandardMaterial color="#8a8a8a" metalness={0.5} />
+          </mesh>
+        </>
+      ) : (
+        // Venue: a neon strip along the back wall.
+        <mesh position={[W / 2, wallH - 0.3, 0.02]}>
+          <boxGeometry args={[W - 1, 0.06, 0.04]} />
+          <meshStandardMaterial color={theme.light} emissive={theme.light} emissiveIntensity={1.5} />
+        </mesh>
+      )}
       {door && (
         <group
           position={[0.02, 0, door.y + 0.5]}
@@ -76,11 +83,6 @@ export function HomeRoom({
           </mesh>
         </group>
       )}
-      {/* Baseboards */}
-      <mesh position={[W / 2, 0.06, 0.01]}>
-        <boxGeometry args={[W, 0.12, 0.04]} />
-        <meshStandardMaterial color="#f2ece2" />
-      </mesh>
     </group>
   );
 }

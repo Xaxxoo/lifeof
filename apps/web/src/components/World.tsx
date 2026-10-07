@@ -20,6 +20,7 @@ import { daylight, findPath, findPathToAny, footprintTiles, nycTime, poseAt, til
 import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { usePolling } from "@/lib/hooks";
+import { randomId } from "@/lib/id";
 import { serverNow, useGame } from "@/lib/store";
 import { useSocket } from "@/lib/SocketContext";
 import { useRealtimeChat, useRealtimeOccupants } from "@/lib/useRealtimeData";
@@ -172,7 +173,7 @@ export function World({ roomId }: { roomId: string }) {
       if (ghost.objectId) {
         await api.moveItem({ objectId: ghost.objectId, x: ghost.x, y: ghost.y, rot: ghost.rot });
       } else {
-        await api.placeItem({ itemId: ghost.itemId, x: ghost.x, y: ghost.y, rot: ghost.rot, requestId: crypto.randomUUID() });
+        await api.placeItem({ itemId: ghost.itemId, x: ghost.x, y: ghost.y, rot: ghost.rot, requestId: randomId() });
         toast(`${ITEM_BY_ID[ghost.itemId]?.name} placed`, "good");
       }
       setGhost(null);

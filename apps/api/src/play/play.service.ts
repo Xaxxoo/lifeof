@@ -259,10 +259,12 @@ export class PlayService {
         Date.now(),
       );
     }
+    const newRoomId = c.activity.kind === "work" ? "work" : "transit";
     await this.characters.update(characterId, {
-      roomId: c.activity.kind === "work" ? "work" : "transit",
+      roomId: newRoomId,
       moodlets,
     });
+    this.gateway.handleRoomChange(characterId, c.activity.roomId, newRoomId);
   }
 
   async complete(characterId: string, activityId: string) {
@@ -384,9 +386,11 @@ export class PlayService {
     });
 
     // Broadcast activity lifecycle events via WebSocket
-    if (patch.roomId && patch.roomId !== a.roomId) {
-      // Player changed rooms
-      this.gateway.handleRoomChange(c.id, a.roomId, patch.roomId);
+    // c.roomId is where the player is NOW (could be "work"/"transit" after board()),
+    // patch.roomId is where they're going, a.roomId is where the activity started.
+    const currentRoom = c.roomId;
+    if (patch.roomId && patch.roomId !== currentRoom) {
+      this.gateway.handleRoomChange(c.id, currentRoom, patch.roomId);
     } else if (early) {
       this.gateway.broadcastToRoom(a.roomId, "activity:stop", { characterId: c.id });
     } else {

@@ -4,6 +4,7 @@ import { CityService } from "../city/city.service";
 import { WorldService } from "../world/world.service";
 import { BankService } from "../bank/bank.service";
 import { WorkService } from "../work/work.service";
+import { StellarDepositService } from "../stellar/stellar-deposit.service";
 
 @Injectable()
 export class ScheduledTasksService {
@@ -12,6 +13,7 @@ export class ScheduledTasksService {
     private world: WorldService,
     private bank: BankService,
     private work: WorkService,
+    private stellarDeposits: StellarDepositService,
   ) {}
 
   @Cron("*/1 * * * *")
@@ -27,6 +29,11 @@ export class ScheduledTasksService {
   @Cron("*/15 * * * *")
   async every15Minutes() {
     await Promise.allSettled([this.city.poll311(), this.work.autopilotTick()]);
+  }
+
+  @Cron("*/2 * * * *")
+  async every2Minutes() {
+    await this.stellarDeposits.pollDeposits();
   }
 
   @Cron("0 * * * *")

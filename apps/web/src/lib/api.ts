@@ -120,4 +120,12 @@ export const api = {
 
   // Transit
   transitTip: () => request<void>("POST", "/transit/tip"),
+
+  // Stellar
+  stellarWallet: () => request<import("./types").StellarWalletDoc | null>("GET", "/stellar/wallet"),
+  createStellarWallet: () => request<import("./types").StellarWalletDoc>("POST", "/stellar/wallet"),
+  retryStellarFunding: () => request<import("./types").StellarWalletDoc>("POST", "/stellar/wallet/retry-funding"),
+  setStellarExternalAddress: (address: string) => request<void>("POST", "/stellar/external-address", { address }),
+  stellarWithdraw: (body: { amount: number; requestId: string }) => request<{ txHash: string }>("POST", "/stellar/withdraw", body),
+  stellarBalance: () => request<{ xlm: string; usdt: string }>("GET", "/stellar/balance"),
 };

@@ -108,6 +108,14 @@ export interface MessageDoc {
   createdAt: string;
 }
 
+export interface StellarWalletDoc {
+  publicKey: string;
+  funded: boolean;
+  trustlineEstablished: boolean;
+  externalAddress: string | null;
+  balances?: { xlm: string; usdt: string };
+}
+
 export interface GigOffer {
   offerId: string;
   gigId: string;

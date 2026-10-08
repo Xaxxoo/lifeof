@@ -6,6 +6,7 @@ import { PlacedObject } from "../entities/placed-object.entity";
 import { LedgerEntry } from "../entities/ledger-entry.entity";
 import { Message } from "../entities/message.entity";
 import { CityState } from "../entities/city-state.entity";
+import { StellarWallet } from "../entities/stellar-wallet.entity";
 
 export function databaseConfig(config: ConfigService): TypeOrmModuleOptions {
   return {
@@ -15,7 +16,7 @@ export function databaseConfig(config: ConfigService): TypeOrmModuleOptions {
     username: config.get("DATABASE_USER", "postgres"),
     password: config.get("DATABASE_PASSWORD", "postgres"),
     database: config.get("DATABASE_NAME", "nyl"),
-    entities: [Character, Presence, PlacedObject, LedgerEntry, Message, CityState],
+    entities: [Character, Presence, PlacedObject, LedgerEntry, Message, CityState, StellarWallet],
     synchronize: true,
   };
 }

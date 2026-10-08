@@ -54,7 +54,14 @@ export function useRealtimeOccupants(roomId: string): Occupant[] {
     initialLoaded.current = false;
     setOccupants([]);
     api.occupants(roomId).then((occ) => {
-      setOccupants(occ);
+      // Deduplicate by characterId in case of stale presence rows
+      const seen = new Set<string>();
+      const unique = occ.filter((o) => {
+        if (seen.has(o.characterId)) return false;
+        seen.add(o.characterId);
+        return true;
+      });
+      setOccupants(unique);
       initialLoaded.current = true;
     }).catch(() => {});
   }, [roomId]);

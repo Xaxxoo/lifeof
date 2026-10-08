@@ -1,18 +1,18 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
-import { api } from "@convex/_generated/api";
+import { useCallback, useEffect, useState } from "react";
 import { activityProgress } from "@nyl/game-core";
 import { SUBWAY_MOMENTS, roomDef } from "@nyl/content";
+import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
+import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
 import { LineBullet } from "./LineBullet";
 
 /** On the train: the character is off the map until the next station. */
-export function SubwayRide({ token }: { token: string }) {
-  const me = useQuery(api.characters.me, { token });
-  const tip = useMutation(api.transit.tip);
+export function SubwayRide() {
+  const meFetcher = useCallback(() => api.me(), []);
+  const me = usePolling(meFetcher, 4000);
   const toast = useGame((s) => s.toast);
   const [now, setNow] = useState(() => serverNow());
   useEffect(() => {
@@ -72,7 +72,7 @@ export function SubwayRide({ token }: { token: string }) {
         {moment?.tip && (
           <button
             disabled={!!a?.tipped}
-            onClick={() => void tip({ token }).catch((e) => toast(playerMessage(e), "error"))}
+            onClick={() => void api.transitTip().catch((e) => toast(playerMessage(e), "error"))}
             className="mt-3 rounded-full bg-[#f3a712] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
           >
             {a?.tipped ? "You tipped $1 ✓" : "Tip $1"}

@@ -1,8 +1,6 @@
 "use client";
 
-import { useMutation } from "convex/react";
 import { useState } from "react";
-import { api } from "@convex/_generated/api";
 import {
   DEFAULT_LOOK,
   HAIR_COLORS,
@@ -17,11 +15,11 @@ import {
   type HairStyleId,
   type Look,
 } from "@nyl/content";
+import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { CharacterPreview } from "./CharacterPreview";
 
-export function CreateCharacter({ token }: { token: string }) {
-  const create = useMutation(api.characters.create);
+export function CreateCharacter() {
   const [name, setName] = useState("");
   const [look, setLook] = useState<Look>(DEFAULT_LOOK);
   const [origin, setOrigin] = useState<string>(ORIGINS[0].id);
@@ -38,7 +36,7 @@ export function CreateCharacter({ token }: { token: string }) {
     setBusy(true);
     setError(null);
     try {
-      await create({ token, name, origin, status, trait, look });
+      await api.createCharacter({ name, origin, status, trait, look });
     } catch (e) {
       setError(playerMessage(e));
       setBusy(false);

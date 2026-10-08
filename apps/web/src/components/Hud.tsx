@@ -1,9 +1,6 @@
 "use client";
 
-import { useMutation } from "convex/react";
 import { useEffect, useState } from "react";
-import { api } from "@convex/_generated/api";
-import type { Doc } from "@convex/_generated/dataModel";
 import {
   activeMoodlets,
   activityProgress,
@@ -17,8 +14,10 @@ import {
   type NeedKey,
 } from "@nyl/game-core";
 import { GIG_BY_ID, ROOMS } from "@nyl/content";
+import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { useGame } from "@/lib/store";
+import type { CharacterDoc, CityStateDoc } from "@/lib/types";
 
 const NEED_LABEL: Record<NeedKey, string> = {
   hunger: "Hunger",
@@ -42,10 +41,9 @@ const COMPLAINT_COPY: Record<string, string> = {
 };
 
 interface HudProps {
-  token: string;
   roomId: string;
-  me: Doc<"characters"> | null;
-  city: Doc<"cityState"> | null;
+  me: CharacterDoc | null;
+  city: CityStateDoc | null;
   clockLabel: string;
   online: number;
   place: string;
@@ -58,7 +56,6 @@ interface HudProps {
 }
 
 export function Hud({
-  token,
   roomId,
   me,
   city,
@@ -74,7 +71,6 @@ export function Hud({
 }: HudProps) {
   const [todayOpen, setTodayOpen] = useState(false);
   const [needsOpen, setNeedsOpen] = useState(false);
-  const stop = useMutation(api.play.stop);
   const toast = useGame((s) => s.toast);
   const clockOffset = useGame((s) => s.clockOffset);
   // Re-render every second so timers and need bars move.
@@ -157,7 +153,7 @@ export function Hud({
             </div>
             <span className="text-[11px] tabular-nums text-white/60">{fmt(Math.max(0, act.endsAt - nowS))}</span>
             <button
-              onClick={() => void stop({ token }).catch((e) => toast(playerMessage(e), "error"))}
+              onClick={() => void api.stopActivity().catch((e) => toast(playerMessage(e), "error"))}
               className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold"
             >
               Stop
@@ -207,7 +203,7 @@ export function Hud({
           >
             {Math.round(mood)}
           </button>
-          <ChatBar token={token} roomId={roomId} />
+          <ChatBar roomId={roomId} />
           {isHome && (
             <button
               onClick={onToggleBuild}
@@ -225,7 +221,7 @@ export function Hud({
   );
 }
 
-function TodayCard({ city, neighborhoodId, onClose }: { city: Doc<"cityState">; neighborhoodId: string | null; onClose: () => void }) {
+function TodayCard({ city, neighborhoodId, onClose }: { city: CityStateDoc; neighborhoodId: string | null; onClose: () => void }) {
   const lines = city.subway.lines;
   const effect = weatherEffectText(city.weather);
   const here = neighborhoodId ? ROOMS[neighborhoodId] : undefined;
@@ -309,8 +305,7 @@ function Section({ title, source, children }: { title: string; source: "live" | 
   );
 }
 
-function ChatBar({ token, roomId }: { token: string; roomId: string }) {
-  const say = useMutation(api.chat.say);
+function ChatBar({ roomId }: { roomId: string }) {
   const [text, setText] = useState("");
   return (
     <form
@@ -320,7 +315,7 @@ function ChatBar({ token, roomId }: { token: string; roomId: string }) {
         const body = text.trim();
         if (!body) return;
         setText("");
-        void say({ token, roomId, body }).catch(() => undefined);
+        void api.sendChat({ roomId, body }).catch(() => undefined);
       }}
     >
       <input

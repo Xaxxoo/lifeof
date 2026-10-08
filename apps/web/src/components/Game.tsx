@@ -1,9 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
-import { api } from "@convex/_generated/api";
-import { getSessionToken } from "@/lib/session";
+import { useCallback, useEffect, useState } from "react";
+import { api, initSession } from "@/lib/api";
+import { usePolling } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
 import { CreateCharacter } from "./CreateCharacter";
 import { Splash } from "./GameLoader";
@@ -15,42 +14,48 @@ import { World } from "./World";
 const HEARTBEAT_MS = 15_000;
 
 export function Game() {
-  const token = useMemo(() => getSessionToken(), []);
-  const me = useQuery(api.characters.me, { token });
+  const [ready, setReady] = useState(false);
 
-  if (me === undefined) return <Splash />;
-  if (me === null) return <CreateCharacter token={token} />;
-  return <Session token={token} />;
+  useEffect(() => {
+    initSession().then(() => setReady(true));
+  }, []);
+
+  const meFetcher = useCallback(() => api.me(), []);
+  const me = usePolling(ready ? meFetcher : null, 4000);
+
+  if (!ready || me === undefined) return <Splash />;
+  if (me === null) return <CreateCharacter />;
+  return <Session />;
 }
 
 /** Joins once, keeps the heartbeat going, and swaps scenes when the server moves us between rooms. */
-function Session({ token }: { token: string }) {
-  const join = useMutation(api.world.join);
-  const heartbeat = useMutation(api.world.heartbeat);
-  const leave = useMutation(api.world.leave);
+function Session() {
   const setClockOffset = useGame((s) => s.setClockOffset);
   const setLocalIntent = useGame((s) => s.setLocalIntent);
-  const roomId = useQuery(api.world.whereAmI, { token });
   const [joined, setJoined] = useState(false);
+
+  const whereAmIFetcher = useCallback(() => api.whereAmI(), []);
+  const whereResult = usePolling(joined ? whereAmIFetcher : null, 4000);
+  const roomId = whereResult?.roomId ?? null;
 
   useEffect(() => {
     let cancelled = false;
     const sentAt = Date.now();
-    join({ token }).then(({ serverNow }) => {
+    api.join().then(({ serverNow }) => {
       if (cancelled) return;
       const receivedAt = Date.now();
       setClockOffset(serverNow - (sentAt + receivedAt) / 2);
       setJoined(true);
     });
-    const beat = setInterval(() => void heartbeat({ token }), HEARTBEAT_MS);
-    const onHide = () => void leave({ token });
+    const beat = setInterval(() => void api.heartbeat(), HEARTBEAT_MS);
+    const onHide = () => void api.leave();
     window.addEventListener("pagehide", onHide);
     return () => {
       cancelled = true;
       clearInterval(beat);
       window.removeEventListener("pagehide", onHide);
     };
-  }, [token, join, heartbeat, leave, setClockOffset]);
+  }, [setClockOffset]);
 
   // A new room means a new scene; drop any optimistic path from the old one.
   useEffect(() => setLocalIntent(null), [roomId, setLocalIntent]);
@@ -59,11 +64,11 @@ function Session({ token }: { token: string }) {
   return (
     <>
       {roomId === "work" ? (
-        <WorkScreen token={token} />
+        <WorkScreen />
       ) : roomId === "transit" ? (
-        <SubwayRide token={token} />
+        <SubwayRide />
       ) : (
-        <World key={roomId} token={token} roomId={roomId} />
+        <World key={roomId} roomId={roomId} />
       )}
       <Toasts />
     </>

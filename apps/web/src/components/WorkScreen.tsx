@@ -1,17 +1,17 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
-import { api } from "@convex/_generated/api";
+import { useCallback, useEffect, useState } from "react";
 import { activityProgress } from "@nyl/game-core";
 import { CAREERS } from "@nyl/content";
+import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
+import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
 
 /** During a shift the character is off the map; this is what the player sees. */
-export function WorkScreen({ token }: { token: string }) {
-  const me = useQuery(api.characters.me, { token });
-  const stop = useMutation(api.play.stop);
+export function WorkScreen() {
+  const meFetcher = useCallback(() => api.me(), []);
+  const me = usePolling(meFetcher, 4000);
   const toast = useGame((s) => s.toast);
   const [now, setNow] = useState(() => serverNow());
   useEffect(() => {
@@ -49,7 +49,7 @@ export function WorkScreen({ token }: { token: string }) {
         <p className="mt-1 text-xs text-white/40">A 20-minute shift counts as a full 8 hours.</p>
 
         <button
-          onClick={() => void stop({ token }).catch((e) => toast(playerMessage(e), "error"))}
+          onClick={() => void api.stopActivity().catch((e) => toast(playerMessage(e), "error"))}
           className="mt-8 rounded-full border border-white/20 px-5 py-2 text-sm text-white/80"
         >
           Leave early (partial pay)

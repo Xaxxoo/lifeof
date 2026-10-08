@@ -1,9 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
-import { api } from "@convex/_generated/api";
-import type { Doc } from "@convex/_generated/dataModel";
+import { useCallback, useState } from "react";
 import { SKILL_KEYS, activeMoodlets, rentPeriodKey, skillLevel, skillProgress } from "@nyl/game-core";
 import {
   CAREERS,
@@ -22,13 +19,15 @@ import {
   route,
 } from "@nyl/content";
 import { LineBullet, lineColor } from "./LineBullet";
+import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
+import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
+import type { CharacterDoc, CityStateDoc } from "@/lib/types";
 
 export type PhoneTab = "map" | "gigs" | "jobs" | "bank" | "me";
 
 export function Phone({
-  token,
   me,
   city,
   initialTab = "map",
@@ -36,9 +35,8 @@ export function Phone({
   onCallHome,
   onRide,
 }: {
-  token: string;
-  me: Doc<"characters">;
-  city: Doc<"cityState"> | null;
+  me: CharacterDoc;
+  city: CityStateDoc | null;
   initialTab?: PhoneTab;
   onClose: () => void;
   onCallHome: () => void;
@@ -69,9 +67,9 @@ export function Phone({
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {tab === "map" && <MapApp me={me} city={city} onRide={onRide} />}
-        {tab === "gigs" && <Gigs token={token} me={me} />}
-        {tab === "jobs" && <Jobs token={token} me={me} />}
-        {tab === "bank" && <Bank token={token} me={me} />}
+        {tab === "gigs" && <Gigs me={me} />}
+        {tab === "jobs" && <Jobs me={me} />}
+        {tab === "bank" && <Bank me={me} />}
         {tab === "me" && <Me me={me} />}
       </div>
       <div className="border-t border-white/10 p-3">
@@ -83,9 +81,7 @@ export function Phone({
   );
 }
 
-function Jobs({ token, me }: { token: string; me: Doc<"characters"> }) {
-  const apply = useMutation(api.work.apply);
-  const quit = useMutation(api.work.quit);
+function Jobs({ me }: { me: CharacterDoc }) {
   const toast = useGame((s) => s.toast);
 
   if (!me.job) {
@@ -105,7 +101,7 @@ function Jobs({ token, me }: { token: string; me: Doc<"characters"> }) {
           )}
           <button
             onClick={() =>
-              apply({ token, careerId: c.id })
+              api.applyJob(c.id)
                 .then((t) => toast(`You're hired: ${t}. Take the L to work.`, "good"))
                 .catch((e) => toast(playerMessage(e), "error"))
             }
@@ -145,7 +141,7 @@ function Jobs({ token, me }: { token: string; me: Doc<"characters"> }) {
         <p className="mt-3 text-xs text-emerald-300">Top of the career. Chef&apos;s kiss.</p>
       )}
       <button
-        onClick={() => quit({ token }).catch((e) => toast(playerMessage(e), "error"))}
+        onClick={() => api.quitJob().catch((e) => toast(playerMessage(e), "error"))}
         className="mt-4 text-xs text-white/40 underline"
       >
         Quit job
@@ -162,9 +158,9 @@ function Req({ done, text }: { done: boolean; text: string }) {
   );
 }
 
-function Bank({ token, me }: { token: string; me: Doc<"characters"> }) {
-  const ledger = useQuery(api.bank.ledger, { token }) ?? [];
-  const payRent = useMutation(api.bank.payRent);
+function Bank({ me }: { me: CharacterDoc }) {
+  const ledgerFetcher = useCallback(() => api.ledger(), []);
+  const ledger = usePolling(ledgerFetcher, 10000) ?? [];
   const toast = useGame((s) => s.toast);
   return (
     <div>
@@ -178,7 +174,7 @@ function Bank({ token, me }: { token: string; me: Doc<"characters"> }) {
             <p className="text-red-300">You owe ${me.rent.owed} (incl. late fees)</p>
             <button
               onClick={() =>
-                payRent({ token })
+                api.payRent()
                   .then(() => toast("Rent paid. The landlord stopped texting.", "good"))
                   .catch((e) => toast(playerMessage(e), "error"))
               }
@@ -192,7 +188,7 @@ function Bank({ token, me }: { token: string; me: Doc<"characters"> }) {
       <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-white/50">Recent</p>
       <div className="mt-1 divide-y divide-white/5">
         {ledger.map((l) => (
-          <div key={l._id} className="flex justify-between py-1.5 text-xs">
+          <div key={l.id} className="flex justify-between py-1.5 text-xs">
             <span className="text-white/75">{l.label ?? l.reason}</span>
             <span className={`tabular-nums ${l.delta >= 0 ? "text-emerald-300" : "text-white/60"}`}>
               {l.delta >= 0 ? "+" : "−"}${Math.abs(l.delta)}
@@ -204,7 +200,7 @@ function Bank({ token, me }: { token: string; me: Doc<"characters"> }) {
   );
 }
 
-function Me({ me }: { me: Doc<"characters"> }) {
+function Me({ me }: { me: CharacterDoc }) {
   const origin = ORIGINS.find((o) => o.id === me.origin);
   const status = STATUSES.find((s) => s.id === me.status);
   const moodlets = activeMoodlets(me.moodlets, serverNow());
@@ -244,7 +240,7 @@ function Me({ me }: { me: Doc<"characters"> }) {
 }
 
 /** Brooklyn map: where you are, live line status, and a ride to anywhere from your block's station. */
-function MapApp({ me, city, onRide }: { me: Doc<"characters">; city: Doc<"cityState"> | null; onRide: (dest: string) => void }) {
+function MapApp({ me, city, onRide }: { me: CharacterDoc; city: CityStateDoc | null; onRide: (dest: string) => void }) {
   const here = roomDef(me.roomId);
   const street = here?.station ? here : here?.exitTo ? roomDef(here.exitTo.roomId) : null;
   const canRide = !!here?.station;
@@ -310,11 +306,10 @@ function MapApp({ me, city, onRide }: { me: Doc<"characters">; city: Doc<"citySt
   );
 }
 
-function Gigs({ token, me }: { token: string; me: Doc<"characters"> }) {
+function Gigs({ me }: { me: CharacterDoc }) {
   const [window] = useState(() => Math.floor(serverNow() / GIG_WINDOW_MS));
-  const offers = useQuery(api.gigs.offers, { token, window }) ?? [];
-  const accept = useMutation(api.gigs.accept);
-  const cancel = useMutation(api.gigs.cancel);
+  const offersFetcher = useCallback(() => api.gigOffers(window), [window]);
+  const offers = usePolling(offersFetcher, 15000) ?? [];
   const toast = useGame((s) => s.toast);
   const stats = me.gigStats;
 
@@ -342,7 +337,7 @@ function Gigs({ token, me }: { token: string; me: Doc<"characters"> }) {
           </ol>
           <p className="mt-3 text-[11px] text-white/50">Tap the highlighted place on the street to do the next step.</p>
         </div>
-        <button onClick={() => void cancel({ token })} className="mt-3 text-xs text-white/40 underline">
+        <button onClick={() => void api.cancelGig()} className="mt-3 text-xs text-white/40 underline">
           Cancel gig (hurts your rating)
         </button>
       </div>
@@ -372,7 +367,7 @@ function Gigs({ token, me }: { token: string; me: Doc<"characters"> }) {
             ) : (
               <button
                 onClick={() =>
-                  accept({ token, offerId: o.offerId })
+                  api.acceptGig(o.offerId)
                     .then(() => toast(`${o.app} gig accepted. Go!`, "good"))
                     .catch((e) => toast(playerMessage(e), "error"))
                 }

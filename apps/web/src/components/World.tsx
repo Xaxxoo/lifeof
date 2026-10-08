@@ -2,11 +2,8 @@
 
 import { OrthographicCamera } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
-import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Color } from "three";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
 import {
   ACTIONS,
   ITEM_BY_ID,
@@ -20,8 +17,11 @@ import {
   type RoomDef,
 } from "@nyl/content";
 import { daylight, findPath, findPathToAny, footprintTiles, nycTime, poseAt, tileAt, weatherKind, type MoveIntent } from "@nyl/game-core";
+import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
+import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
+import type { CharacterDoc, CityStateDoc, MessageDoc, Occupant, PlacedObjectDoc } from "@/lib/types";
 import { ActionMenu } from "./ActionMenu";
 import { BuildPanel, type Ghost } from "./BuildPanel";
 import { Hud } from "./Hud";
@@ -42,22 +42,33 @@ const NIGHT_SKY = new Color("#0b1020");
 const DAY_SKY = new Color("#a9d2ee");
 const NO_OBJECTS: PlacedObject[] = [];
 
-export function World({ token, roomId }: { token: string; roomId: string }) {
+/** Convert REST PlacedObjectDoc (id) to the PlacedObject shape (with _id) used by scene components. */
+function toPlacedObjects(docs: PlacedObjectDoc[]): PlacedObject[] {
+  return docs.map((d) => ({ _id: d.id, itemId: d.itemId, x: d.x, y: d.y, rot: d.rot }));
+}
+
+export function World({ roomId }: { roomId: string }) {
   const room = useMemo(() => roomDef(roomId)!, [roomId]);
   const isHome = room.kind === "home";
   const indoor = isHome || room.kind === "venue";
-  const objects = (useQuery(api.world.objects, isHome ? { roomId } : "skip") as PlacedObject[] | undefined) ?? NO_OBJECTS;
+
+  const objectsFetcher = useCallback(() => api.objects(roomId), [roomId]);
+  const rawObjects = usePolling(isHome ? objectsFetcher : null, 10000);
+  const objects: PlacedObject[] = rawObjects ? toPlacedObjects(rawObjects) : NO_OBJECTS;
+  // Keep raw docs for paid field access in build panel
+  const rawObjectDocs = rawObjects ?? [];
   const layout = useMemo(() => buildRoomLayout(room, objects), [room, objects]);
 
-  const me = useQuery(api.characters.me, { token });
-  const occupants = useQuery(api.world.occupants, { roomId }) ?? [];
-  const messages = useQuery(api.chat.recent, { roomId }) ?? [];
-  const city = useQuery(api.city.get, {});
-  const move = useMutation(api.world.move);
-  const start = useMutation(api.play.start);
-  const place = useMutation(api.build.place);
-  const moveObject = useMutation(api.build.move);
-  const sell = useMutation(api.build.sell);
+  const meFetcher = useCallback(() => api.me(), []);
+  const me = usePolling(meFetcher, 4000) as CharacterDoc | null | undefined;
+  const occupantsFetcher = useCallback(() => api.occupants(roomId), [roomId]);
+  const occupantsRaw = usePolling(occupantsFetcher, 3000);
+  const occupants: Occupant[] = occupantsRaw ?? [];
+  const chatFetcher = useCallback(() => api.recentChat(roomId), [roomId]);
+  const messagesRaw = usePolling(chatFetcher, 2000);
+  const messages: MessageDoc[] = messagesRaw ?? [];
+  const cityFetcher = useCallback(() => api.city(), []);
+  const city = usePolling(cityFetcher, 30000) as CityStateDoc | null | undefined;
 
   const localIntent = useGame((s) => s.localIntent);
   const setLocalIntent = useGame((s) => s.setLocalIntent);
@@ -74,7 +85,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [npcSay, setNpcSay] = useState<{ id: string; text: string; until: number } | null>(null);
 
-  const mine = occupants.find((o) => o.characterId === me?._id);
+  const mine = occupants.find((o) => o.characterId === me?.id);
   const serverIntent: MoveIntent | null = mine ? { path: mine.path, startedAt: mine.startedAt } : null;
   // Prefer our optimistic path until the server's newer copy lands.
   const myIntent =
@@ -94,7 +105,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
     const path = findPath(layout.grid, tileAt(myIntent, serverNow()), { x, y });
     if (!path) return;
     setLocalIntent({ path, startedAt: serverNow() });
-    void move({ token, target: { x, y } }).catch((e) => toast(playerMessage(e), "error"));
+    void api.move({ x, y }).catch((e) => toast(playerMessage(e), "error"));
   }
 
   function onTileClick(x: number, y: number) {
@@ -139,7 +150,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
       if (path) setLocalIntent({ path, startedAt: serverNow() });
     }
     try {
-      const r = await start({ token, target, actionId, dest });
+      const r = await api.startActivity({ target, actionId, dest });
       if (r.trainDelayed) toast("Heads up: your line is delayed right now, in real life.", "info");
       if (target.startsWith("npc:")) {
         const npc = room.npcs?.find((n) => `npc:${n.id}` === target);
@@ -155,9 +166,9 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
     if (!ghost) return;
     try {
       if (ghost.objectId) {
-        await moveObject({ token, objectId: ghost.objectId as Id<"objects">, x: ghost.x, y: ghost.y, rot: ghost.rot });
+        await api.moveItem({ objectId: ghost.objectId, x: ghost.x, y: ghost.y, rot: ghost.rot });
       } else {
-        await place({ token, itemId: ghost.itemId, x: ghost.x, y: ghost.y, rot: ghost.rot, requestId: crypto.randomUUID() });
+        await api.placeItem({ itemId: ghost.itemId, x: ghost.x, y: ghost.y, rot: ghost.rot, requestId: crypto.randomUUID() });
         toast(`${ITEM_BY_ID[ghost.itemId]?.name} placed`, "good");
       }
       setGhost(null);
@@ -177,13 +188,14 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
   const weather = indoor ? null : weatherKind(city?.weather.summary ?? "");
 
   const bubbles = new Map<string, string>();
-  for (const m of messages) if (nowS - m._creationTime < BUBBLE_MS) bubbles.set(m.characterId, m.body);
+  for (const m of messages) if (nowS - new Date(m.createdAt).getTime() < BUBBLE_MS) bubbles.set(m.characterId, m.body);
 
   const menuThing = menuKey ? layout.interactables.get(menuKey) : null;
   const menuActions = menuThing
     ? [...menuThing.actions, ...(gigStep && gigStep.target === menuKey ? [gigStep.action] : [])]
     : [];
   const selectedObj = selectedId ? objects.find((o) => o._id === selectedId) ?? null : null;
+  const selectedDoc = selectedId ? rawObjectDocs.find((o) => o.id === selectedId) ?? null : null;
   const stationLines = room.station?.lines ?? [];
   const lineNote = stationLines
     .map((l) => `${l}: ${city?.subway.lines.find((x) => x.line === l)?.status ?? "?"}`)
@@ -226,7 +238,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
           <NpcAvatar key={n.id} npc={n} onPick={() => open(`npc:${n.id}`)} />
         ))}
         {occupants.map((o) => {
-          const isMe = o.characterId === me?._id;
+          const isMe = o.characterId === me?.id;
           return (
             <Avatar
               key={o.characterId}
@@ -283,7 +295,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
           );
         })}
         {occupants.map((o) => {
-          const isMe = o.characterId === me?._id;
+          const isMe = o.characterId === me?.id;
           const intent = isMe && myIntent ? myIntent : { path: o.path, startedAt: o.startedAt };
           const anchor = anchorFor(o.activity, layout.interactables, nowS);
           const bubble = bubbles.get(o.characterId);
@@ -311,7 +323,6 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
       </div>
 
       <Hud
-        token={token}
         roomId={roomId}
         me={me ?? null}
         city={city ?? null}
@@ -354,7 +365,6 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
 
       {phoneTab && me && (
         <Phone
-          token={token}
           me={me}
           city={city ?? null}
           initialTab={phoneTab}
@@ -369,7 +379,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
           cash={me.cash}
           ghost={ghost}
           ghostValid={ghostValid}
-          selected={selectedObj ? { _id: selectedObj._id, itemId: selectedObj.itemId, paid: (selectedObj as PlacedObject & { paid?: number }).paid } : null}
+          selected={selectedObj ? { _id: selectedObj._id, itemId: selectedObj.itemId, paid: selectedDoc?.paid } : null}
           onPickItem={startPlacing}
           onRotate={() => ghost && setGhost({ ...ghost, rot: (ghost.rot + 1) % 4 })}
           onConfirm={() => void confirmGhost()}
@@ -381,7 +391,7 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
           }}
           onSellSelected={() => {
             if (!selectedObj) return;
-            void sell({ token, objectId: selectedObj._id as Id<"objects"> })
+            void api.sellItem(selectedObj._id)
               .then((r) => toast(r.refund ? `Sold for $${r.refund}` : "Removed", "good"))
               .catch((e) => toast(playerMessage(e), "error"));
             setSelectedId(null);
@@ -396,10 +406,10 @@ export function World({ token, roomId }: { token: string; roomId: string }) {
   );
 }
 
-type Occupant = { activity: { status: string; pose: string; startsAt: number; endsAt: number; target: string } | null };
+type OccupantActivity = { status: string; pose: string; startsAt: number; endsAt: number; target: string } | null;
 
 function anchorFor(
-  activity: Occupant["activity"],
+  activity: OccupantActivity,
   interactables: ReturnType<typeof buildRoomLayout>["interactables"],
   nowS: number,
 ): ActivityAnchor | null {

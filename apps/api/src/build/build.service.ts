@@ -2,11 +2,13 @@ import { Injectable, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { footprintTiles, inBounds, tileAt } from "@nyl/game-core";
-import { ITEM_BY_ID, SELL_BACK_RATE, homeRoomId, roomDef } from "@nyl/content";
+import { ITEM_BY_ID, SELL_BACK_RATE, wallEdges } from "@nyl/content";
 import { Character } from "../entities/character.entity";
 import { PlacedObject } from "../entities/placed-object.entity";
 import { Presence } from "../entities/presence.entity";
 import { BankService } from "../bank/bank.service";
+import { WorldService } from "../world/world.service";
+import { crossesWall } from "../homes/homes.service";
 
 @Injectable()
 export class BuildService {
@@ -15,12 +17,14 @@ export class BuildService {
     @InjectRepository(PlacedObject) private objects: Repository<PlacedObject>,
     @InjectRepository(Presence) private presenceRepo: Repository<Presence>,
     private bank: BankService,
+    private world: WorldService,
   ) {}
 
   private async requireAtHome(token: string) {
     const c = await this.requireByToken(token);
-    const roomId = homeRoomId(c.id);
-    if (c.roomId !== roomId) throw new BadRequestException("Build mode works at home");
+    const roomId = c.roomId;
+    const home = roomId.startsWith("home:") ? await this.world.homeById(roomId.slice("home:".length)) : null;
+    if (!home || home.ownerId !== c.id) throw new BadRequestException("Build mode works in a home you own");
     if (c.activity) throw new BadRequestException("Finish what you're doing first");
     return { c, roomId };
   }
@@ -35,12 +39,13 @@ export class BuildService {
     ignoreId?: string,
   ) {
     const item = ITEM_BY_ID[itemId];
-    const room = roomDef(roomId);
+    const room = await this.world.roomFor(roomId);
     if (!item || !room) throw new BadRequestException("Unknown item");
     if (![0, 1, 2, 3].includes(rot)) throw new BadRequestException("Bad rotation");
     const tiles = footprintTiles(x, y, item.w, item.h, rot);
     const grid = { width: room.width, height: room.height, blocked: new Set<string>() };
     if (tiles.some((t) => !inBounds(grid, t))) throw new BadRequestException("It doesn't fit there");
+    if (room.home && crossesWall(tiles, wallEdges(room.home.layout.walls))) throw new BadRequestException("It won't fit through the wall");
 
     const taken = new Set<string>();
     for (const p of room.props) for (const t of footprintTiles(p.x, p.y, p.w, p.h)) taken.add(`${t.x},${t.y}`);

@@ -29,7 +29,9 @@ import {
   SUBWAY_FARE,
   SUBWAY_MOMENTS,
   goalTiles,
-  homeRoomId,
+  homeRoom,
+  ITEM_BY_ID,
+  qualityMultiplier,
   roomDef,
   route,
   type OpenHours,
@@ -103,8 +105,14 @@ export class PlayService {
     const from = tileAt({ path: p.path, startedAt: Number(p.startedAt) }, now);
     let path = [from];
 
+    // Riding from inside a shop or venue: step out and head straight to the block's station.
+    const rideFromInside = action.kind === "ride" && !room.station && !!room.exitTo && !!roomDef(room.exitTo.roomId)?.station;
+    const rideFrom = rideFromInside ? room.exitTo!.roomId : p.roomId;
+
     if (target === PHONE_TARGET) {
       if (actionId !== "call_home") throw new BadRequestException("You can't do that from your phone");
+    } else if (rideFromInside) {
+      // No walk: you leave through the door and you're on your way.
     } else {
       const thing = loaded.interactables.get(target);
       if (!thing) throw new BadRequestException("That isn't here");
@@ -143,17 +151,17 @@ export class PlayService {
     let cost = action.cost ?? 0;
 
     if (action.kind === "travel") {
-      if (actionId === "go_home") travelTo = homeRoomId(c.id);
+      if (actionId === "go_home") travelTo = homeRoom((await this.world.residence(c)).id);
       else if (actionId === "go_out") travelTo = room.exitTo?.roomId;
       else if (actionId === "enter_venue") travelTo = room.props.find((x) => `prop:${x.id}` === target)?.enter;
-      const to = travelTo ? roomDef(travelTo) : null;
+      const to = travelTo ? await this.world.roomFor(travelTo) : null;
       if (!to || !travelTo) throw new BadRequestException("Can't go that way");
       if (to.open && !openNow(to.open, now)) throw new BadRequestException(`${to.name} is closed. ${hoursText(to.open)}`);
     }
 
     if (action.kind === "ride") {
       if (!dest) throw new BadRequestException("Pick where you're going");
-      const r = route(p.roomId, dest);
+      const r = route(rideFrom, dest);
       if (!r) throw new BadRequestException("No train goes there from here");
       const cityState = await this.city.get();
       const late = r.lines.some((line) => {
@@ -193,6 +201,13 @@ export class PlayService {
       endsAt = startsAt + SHIFT_MINUTES * 60_000;
       status = `At work: ${career.levels[c.job.level - 1]!.title}`;
       needs = career.shiftNeeds;
+    }
+
+    // Better furniture restores more of what it's for.
+    if (target.startsWith("obj:") && needs) {
+      const obj = loaded.objects.find((o) => `obj:${o.id}` === target);
+      const mult = qualityMultiplier(ITEM_BY_ID[obj?.itemId ?? ""]?.stars ?? 1);
+      if (mult > 1) needs = Object.fromEntries(Object.entries(needs).map(([k, v]) => [k, v > 0 ? Math.round(v * mult) : v]));
     }
 
     if (cost) {
@@ -313,7 +328,7 @@ export class PlayService {
     }
 
     if (a.kind === "travel" && a.travelTo && now >= a.startsAt) {
-      const from = roomDef(a.roomId);
+      const from = await this.world.roomFor(a.roomId);
       const at = a.actionId === "go_out" ? from?.exitTo?.at : undefined;
       await this.world.moveToRoom(c.id, a.travelTo, now, at);
       patch.roomId = a.travelTo;

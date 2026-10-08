@@ -1,13 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { findPathToAny, footprintTiles, isWalkable } from "@nyl/game-core";
-import { ACTIONS, GIGS, ITEM_BY_ID, ROOMS, STREETS, VENUES, BASEMENT_ROOM, BASEMENT_STARTER, buildRoomLayout, goalTiles, roomDef, route } from "./index";
+import {
+  ACTIONS,
+  BASEMENT_STARTER,
+  GIGS,
+  HOME_TIERS,
+  ITEM_BY_ID,
+  ITEMS,
+  LOTS,
+  ROOMS,
+  SHOPS,
+  STREETS,
+  VENUES,
+  buildRoomLayout,
+  emptyLotLayout,
+  goalTiles,
+  homeRoomDef,
+  roomDef,
+  route,
+} from "./index";
 
-const all = [...STREETS, ...VENUES, BASEMENT_ROOM];
+const homes = [
+  ...HOME_TIERS.map((t) => homeRoomDef(`home:${t.id}`, { id: t.id, kind: "rental", defId: t.id, layout: t.layout })),
+  ...LOTS.map((l) => homeRoomDef(`home:${l.id}`, { id: l.id, kind: "lot", defId: l.id, layout: emptyLotLayout(l) })),
+];
+const all = [...STREETS, ...VENUES, ...SHOPS, ...homes];
 
 describe("rooms", () => {
   for (const room of all) {
     describe(room.id, () => {
-      const objects = room.kind === "home" ? BASEMENT_STARTER.map((s, i) => ({ _id: `o${i}`, ...s })) : [];
+      const objects = room.id === "home:basement" ? BASEMENT_STARTER.map((s, i) => ({ _id: `o${i}`, ...s })) : [];
       const { grid, interactables } = buildRoomLayout(room, objects);
 
       it("keeps props in bounds and solid props apart", () => {
@@ -36,6 +58,15 @@ describe("rooms", () => {
         for (const thing of interactables.values()) {
           if (!thing.actions.length && !thing.tags?.length) continue;
           expect(findPathToAny(grid, room.spawn, goalTiles(thing)), `${thing.key} unreachable`).not.toBeNull();
+        }
+      });
+
+      it("leaves no tile walled off", () => {
+        if (!room.home) return;
+        for (let x = 1; x < room.width; x++) {
+          for (let y = 0; y < room.height; y++) {
+            if (!grid.blocked.has(`${x},${y}`)) expect(findPathToAny(grid, room.spawn, [{ x, y }]), `${x},${y}`).not.toBeNull();
+          }
         }
       });
 
@@ -71,5 +102,6 @@ describe("gigs and items", () => {
   it("reference real actions and items", () => {
     for (const g of GIGS) for (const s of g.stops) expect(ACTIONS[s.action]).toBeDefined();
     for (const s of BASEMENT_STARTER) expect(ITEM_BY_ID[s.itemId]).toBeDefined();
+    for (const item of ITEMS) for (const a of item.actions) expect(ACTIONS[a], `${item.id}: ${a}`).toBeDefined();
   });
 });

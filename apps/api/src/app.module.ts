@@ -16,6 +16,7 @@ import { ChatModule } from "./chat/chat.module";
 import { TransitModule } from "./transit/transit.module";
 import { StellarModule } from "./stellar/stellar.module";
 import { EventsModule } from "./events/events.module";
+import { HomesModule } from "./homes/homes.module";
 import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
 
 @Module({
@@ -40,6 +41,7 @@ import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
     TransitModule,
     StellarModule,
     EventsModule,
+    HomesModule,
   ],
   providers: [ScheduledTasksService],
 })

@@ -9,7 +9,20 @@ import {
   type Needs,
   type RoomGrid,
 } from "@nyl/game-core";
-import { STREET_ID, buildRoomLayout, roomDef, type Interactable, type RoomDef } from "@nyl/content";
+import {
+  BASEMENT_STARTER,
+  STREET_ID,
+  TIER_BY_ID,
+  buildRoomLayout,
+  homeRoom,
+  homeRoomDef,
+  isHomeRoom,
+  roomDef,
+  type HomeInfo,
+  type Interactable,
+  type RoomDef,
+} from "@nyl/content";
+import { Home } from "../entities/home.entity";
 import { Character } from "../entities/character.entity";
 import { Presence } from "../entities/presence.entity";
 import { PlacedObject } from "../entities/placed-object.entity";
@@ -32,7 +45,53 @@ export class WorldService {
     @InjectRepository(Presence) private presenceRepo: Repository<Presence>,
     @InjectRepository(PlacedObject) private objects: Repository<PlacedObject>,
     @InjectRepository(CityState) private cityStates: Repository<CityState>,
+    @InjectRepository(Home) private homes: Repository<Home>,
   ) {}
+
+  /** Any room by id; homes come from their saved layout. */
+  async roomFor(roomId: string): Promise<RoomDef | null> {
+    if (!isHomeRoom(roomId)) return roomDef(roomId);
+    const home = await this.homes.findOneBy({ id: roomId.slice("home:".length) });
+    return home ? homeRoomDef(roomId, homeInfo(home)) : roomDef(roomId);
+  }
+
+  async homeById(id: string): Promise<Home | null> {
+    return this.homes.findOneBy({ id });
+  }
+
+  /**
+   * Where this character lives. Everyone starts in a basement rental whose id is their own id,
+   * which is also where older saves already keep their furniture.
+   */
+  async residence(c: Character): Promise<Home> {
+    if (c.homeId) {
+      const h = await this.homes.findOneBy({ id: c.homeId });
+      if (h) return h;
+    }
+    const existing = await this.homes.findOneBy({ id: c.id });
+    const home =
+      existing ??
+      (await this.homes.save({
+        id: c.id,
+        ownerId: c.id,
+        kind: "rental" as const,
+        defId: "basement",
+        layout: structuredClone(TIER_BY_ID.basement!.layout),
+        createdAt: Date.now(),
+      }));
+    await this.characters.update(c.id, { homeId: home.id });
+    c.homeId = home.id;
+    return home;
+  }
+
+  /** A brand-new character's basement, with the starter furniture. */
+  async createStarterHome(c: Character) {
+    const home = await this.residence(c);
+    for (const s of BASEMENT_STARTER) {
+      await this.objects.save({ roomId: homeRoom(home.id), itemId: s.itemId, x: s.x, y: s.y, rot: s.rot, paid: 0 });
+    }
+    return home;
+  }
 
   currentNeeds(c: Character, now: number, city?: CityState | null): Needs {
     const offline = now - Number(c.lastSeenAt) > OFFLINE_GAP_MS;
@@ -51,7 +110,7 @@ export class WorldService {
   }
 
   async loadRoom(roomId: string): Promise<LoadedRoom> {
-    const room = roomDef(roomId);
+    const room = await this.roomFor(roomId);
     if (!room) throw new BadRequestException("Unknown room");
     const objects = await this.objects.find({ where: { roomId }, take: 200 });
     const placed = objects.map((o) => ({ _id: o.id, itemId: o.itemId, x: o.x, y: o.y, rot: o.rot }));
@@ -63,7 +122,7 @@ export class WorldService {
     if (c.roomId === "work" || c.roomId === "transit") return null;
     const existing = await this.presenceOf(c.id);
     if (existing) return existing;
-    const room = roomDef(c.roomId);
+    const room = await this.roomFor(c.roomId);
     if (!room) return null;
     const p = this.presenceRepo.create({
       characterId: c.id,
@@ -87,14 +146,14 @@ export class WorldService {
       return { serverNow: now, roomId: c.roomId };
     }
 
-    const roomId = roomDef(c.roomId) ? c.roomId : STREET_ID;
+    const roomId = (await this.roomFor(c.roomId)) ? c.roomId : STREET_ID;
     const existing = await this.presenceOf(c.id);
     if (existing && existing.roomId === roomId) {
       await this.presenceRepo.update(existing.id, { updatedAt: now });
       return { serverNow: now, roomId };
     }
     if (existing) await this.presenceRepo.delete(existing.id);
-    const room = roomDef(roomId)!;
+    const room = (await this.roomFor(roomId))!;
     await this.presenceRepo.save({
       characterId: c.id,
       roomId,
@@ -165,7 +224,7 @@ export class WorldService {
 
   async whereAmI(token: string) {
     const c = await this.requireByToken(token);
-    return c.roomId;
+    return { roomId: c.roomId };
   }
 
   async cleanupPresence() {
@@ -178,7 +237,7 @@ export class WorldService {
   }
 
   async moveToRoom(characterId: string, toRoomId: string, now: number, at?: { x: number; y: number }) {
-    const to = roomDef(toRoomId);
+    const to = await this.roomFor(toRoomId);
     if (!to) return;
     const spawn = at ?? to.spawn;
     const p = await this.presenceOf(characterId);
@@ -194,4 +253,8 @@ export class WorldService {
     if (!c) throw new BadRequestException("No character for this session");
     return c;
   }
+}
+
+export function homeInfo(h: Home): HomeInfo {
+  return { id: h.id, kind: h.kind, defId: h.defId, layout: h.layout };
 }

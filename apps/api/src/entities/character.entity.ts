@@ -97,4 +97,12 @@ export class Character {
 
   @Column({ type: "jsonb" })
   rent!: { perWeek: number; lastPeriod: string; owed: number; missedWeeks: number };
+
+  /** The home you live in (rental or your own lot); null until first needed. */
+  @Column({ type: "uuid", nullable: true })
+  homeId!: string | null;
+
+  /** Paints and floors you've bought; they stay yours when you move. */
+  @Column({ type: "jsonb", default: () => `'{"paints":["cream"],"floors":["oak"]}'` })
+  unlocks!: { paints: string[]; floors: string[] };
 }

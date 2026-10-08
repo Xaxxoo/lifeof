@@ -1,5 +1,6 @@
 import { footprintTiles, type RoomGrid, type Tile } from "@nyl/game-core";
 import { ITEM_BY_ID } from "./items";
+import { wallEdges } from "./homes";
 import type { RoomDef } from "./rooms";
 
 export interface PlacedItem {
@@ -36,6 +37,9 @@ const SEAT_HEIGHT: Record<string, number> = {
   tv: 0,
 };
 
+/** Props you sit on, and how high. */
+const PROP_SEAT: Partial<Record<string, number>> = { bench: 0.32, stool: 0.5, salonchair: 0.5, pew: 0.45 };
+
 /**
  * One source of truth for a room's walkable grid and tappable things,
  * used by the server to validate and by the client to predict.
@@ -59,7 +63,7 @@ export function buildRoomLayout(room: RoomDef, objects: PlacedItem[]): { grid: R
         tiles,
         actions: p.actions ?? [],
         center,
-        seat: p.kind === "bench" || p.kind === "stool" ? { ...center, y: p.kind === "stool" ? 0.5 : 0.32 } : p.walkable ? { ...center, y: 0.02 } : null,
+        seat: PROP_SEAT[p.kind] !== undefined ? { ...center, y: PROP_SEAT[p.kind]! } : p.walkable ? { ...center, y: 0.02 } : null,
         walkOn: p.walkable,
         tags: p.tags,
         kind: "prop",
@@ -99,7 +103,8 @@ export function buildRoomLayout(room: RoomDef, objects: PlacedItem[]): { grid: R
       });
     }
   }
-  return { grid: { width: room.width, height: room.height, blocked }, interactables };
+  const edges = room.home ? wallEdges(room.home.layout.walls) : undefined;
+  return { grid: { width: room.width, height: room.height, blocked, edges }, interactables };
 }
 
 /** Where to walk to use something: onto it for lawns and dance floors, beside it otherwise. */

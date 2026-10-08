@@ -24,7 +24,7 @@ export function route(fromRoomId: string, toRoomId: string): Route | null {
   const transfers = shared.length ? 0 : 1;
   const dist = Math.hypot(pa.x - pb.x, pa.y - pb.y);
   const lines = shared.length ? [shared[0]!] : [a.lines[0]!, b.lines[0]!];
-  return { from: fromRoomId, to: toRoomId, lines, transfers, baseMs: Math.round(25_000 + dist * 9_000 + transfers * 15_000) };
+  return { from: fromRoomId, to: toRoomId, lines, transfers, baseMs: Math.round(8_000 + dist * 2_500 + transfers * 4_000) };
 }
 
 /** Things that happen on the train. One is picked per ride. */

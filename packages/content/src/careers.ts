@@ -41,8 +41,8 @@ export const FOOD_CAREER: CareerDef = {
 
 export const CAREERS: Record<string, CareerDef> = { food: FOOD_CAREER };
 
-/** Real minutes per shift (PRD §5: a 20-minute shift counts as 8 hours). */
-export const SHIFT_MINUTES = 20;
+/** Real minutes per shift; a short shift counts as a full 8-hour day. */
+export const SHIFT_MINUTES = 5;
 /** Student visa: campus jobs only, max 4 shifts a week (PRD §6.3). */
 export const STUDENT_SHIFTS_PER_WEEK = 4;
 /** Autopilot shifts while offline pay this share (PRD §5). */

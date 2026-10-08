@@ -120,7 +120,7 @@ describe("m1 rules", () => {
   });
 });
 
-import { weatherNeedMultipliers } from "./index";
+import { canStep, weatherNeedMultipliers } from "./index";
 
 describe("weather", () => {
   it("speeds up the right needs and caps the effect", () => {
@@ -128,5 +128,17 @@ describe("weather", () => {
     expect(weatherNeedMultipliers({ tempF: 60, summary: "Light Rain" }).hygiene).toBe(1.25);
     const hotRain = weatherNeedMultipliers({ tempF: 95, summary: "Thunderstorms" });
     expect(hotRain.hygiene).toBeLessThanOrEqual(1.4);
+  });
+});
+
+describe("walls between tiles", () => {
+  it("routes around a wall and through its door gap", () => {
+    // A wall down the west edge of column 2, with a gap (door) at y = 3.
+    const edges = new Set(["2,0,w", "2,1,w", "2,2,w"]);
+    const grid = { width: 4, height: 4, blocked: new Set<string>(), edges };
+    const path = findPath(grid, { x: 1, y: 0 }, { x: 2, y: 0 })!;
+    expect(path.some((t) => t.y === 3)).toBe(true);
+    expect(canStep(grid, { x: 1, y: 1 }, { x: 2, y: 1 })).toBe(false);
+    expect(canStep(grid, { x: 1, y: 3 }, { x: 2, y: 3 })).toBe(true);
   });
 });

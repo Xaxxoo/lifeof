@@ -3,12 +3,11 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { emptySkills, rentPeriodKey, startingNeeds } from "@nyl/game-core";
 import {
-  BASEMENT_STARTER,
   GENDER_IDS,
   SEXUALITY_IDS,
   HAIR_COLORS,
   HAIR_STYLE_IDS,
-  HOME_RENT_PER_WEEK,
+  TIER_BY_ID,
   ORIGIN_CASH_BONUS,
   ORIGIN_IDS,
   PANTS_COLORS,
@@ -17,11 +16,11 @@ import {
   STATUSES,
   STREET_ID,
   TRAIT_IDS,
-  homeRoomId,
 } from "@nyl/content";
 import { Character } from "../entities/character.entity";
 import { PlacedObject } from "../entities/placed-object.entity";
 import { BankService } from "../bank/bank.service";
+import { WorldService } from "../world/world.service";
 
 function oneOf(list: readonly string[], value: string, what: string) {
   if (!list.includes(value)) throw new BadRequestException(`Unknown ${what}`);
@@ -33,6 +32,7 @@ export class CharactersService {
     @InjectRepository(Character) private characters: Repository<Character>,
     @InjectRepository(PlacedObject) private objects: Repository<PlacedObject>,
     private bank: BankService,
+    private world: WorldService,
   ) {}
 
   async me(token: string) {
@@ -97,7 +97,7 @@ export class CharactersService {
       moodlets: [],
       roomId: STREET_ID,
       shiftWeek: { period: rentPeriodKey(now), count: 0 },
-      rent: { perWeek: HOME_RENT_PER_WEEK, lastPeriod: rentPeriodKey(now), owed: 0, missedWeeks: 0 },
+      rent: { perWeek: TIER_BY_ID.basement!.rentPerWeek, lastPeriod: rentPeriodKey(now), owed: 0, missedWeeks: 0 },
     });
     const saved = await this.characters.save(character);
 
@@ -106,16 +106,7 @@ export class CharactersService {
       label: "Savings you arrived with",
     });
 
-    for (const s of BASEMENT_STARTER) {
-      await this.objects.save({
-        roomId: homeRoomId(saved.id),
-        itemId: s.itemId,
-        x: s.x,
-        y: s.y,
-        rot: s.rot,
-        paid: 0,
-      });
-    }
+    await this.world.createStarterHome(saved);
 
     return saved;
   }

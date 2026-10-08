@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { activityProgress } from "@nyl/game-core";
-import { CAREERS } from "@nyl/content";
+import { CAREERS, SHIFT_MINUTES } from "@nyl/content";
 import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { usePolling } from "@/lib/hooks";
@@ -14,6 +14,8 @@ export function WorkScreen() {
   const me = usePolling(meFetcher, 4000);
   const toast = useGame((s) => s.toast);
   const [now, setNow] = useState(() => serverNow());
+  // Back from work: the street plays the walk up the subway stairs.
+  useEffect(() => () => useGame.setState({ emergeAt: serverNow() }), []);
   useEffect(() => {
     const id = setInterval(() => setNow(serverNow()), 1000);
     return () => clearInterval(id);
@@ -46,7 +48,7 @@ export function WorkScreen() {
         <p className="mt-2 text-sm tabular-nums text-white/70">
           {Math.floor(left / 60000)}:{String(Math.floor((left % 60000) / 1000)).padStart(2, "0")} left · about ${pay}
         </p>
-        <p className="mt-1 text-xs text-white/40">A 20-minute shift counts as a full 8 hours.</p>
+        <p className="mt-1 text-xs text-white/40">A {SHIFT_MINUTES}-minute shift counts as a full 8 hours.</p>
 
         <button
           onClick={() => void api.stopActivity().catch((e) => toast(playerMessage(e), "error"))}

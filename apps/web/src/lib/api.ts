@@ -1,4 +1,15 @@
-import type { CharacterDoc, CityStateDoc, GigOffer, LedgerEntryDoc, MessageDoc, Occupant, PlacedObjectDoc } from "./types";
+import type {
+  BuildOp,
+  CharacterDoc,
+  CityStateDoc,
+  GigOffer,
+  HomeDoc,
+  HomesMine,
+  LedgerEntryDoc,
+  MessageDoc,
+  Occupant,
+  PlacedObjectDoc,
+} from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const JWT_KEY = "nyl_jwt";
@@ -42,6 +53,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error(msg);
   }
 
+  // Nest sends an empty body for a null result; usePolling reads undefined as "still loading".
   const text = await res.text();
   return text ? JSON.parse(text) : (null as T);
 }
@@ -85,7 +97,7 @@ export const api = {
 
   // Play
   startActivity: (body: { target: string; actionId: string; dest?: string }) =>
-    request<{ trainDelayed?: boolean }>("POST", "/play/start", body),
+    request<{ trainDelayed?: boolean; startsAt: number; arrival: number }>("POST", "/play/start", body),
   stopActivity: () => request<void>("POST", "/play/stop"),
   finishActivity: () => request<void>("POST", "/play/finish"),
 
@@ -110,6 +122,18 @@ export const api = {
     request<void>("POST", "/build/place", body),
   moveItem: (body: { objectId: string; x: number; y: number; rot: number }) =>
     request<void>("POST", "/build/move", body),
+
+  // Homes
+  homesMine: () => request<HomesMine>("GET", "/homes/mine"),
+  homeLayout: (homeId: string) => request<HomeDoc>("GET", `/homes/layout/${encodeURIComponent(homeId)}`),
+  rentHome: (tierId: string) => request<{ homeId: string; refunded: number }>("POST", "/homes/rent", { tierId }),
+  buyLot: (lotId: string) => request<HomeDoc>("POST", "/homes/buy-lot", { lotId }),
+  moveIntoHome: (homeId: string) => request<{ homeId: string; refunded: number }>("POST", "/homes/move-in", { homeId }),
+  visitHome: (homeId: string) => request<{ roomId: string }>("POST", "/homes/visit", { homeId }),
+  paintWalls: (paintId: string) => request<void>("POST", "/homes/paint", { paintId }),
+  layFloor: (floorId: string) => request<void>("POST", "/homes/floor", { floorId }),
+  unlockFloor: (floorId: string) => request<void>("POST", "/homes/unlock-floor", { floorId }),
+  build: (ops: BuildOp[]) => request<{ cost: number; refund: number }>("POST", "/homes/build", { ops }),
 
   // City
   city: () => request<CityStateDoc>("GET", "/city"),

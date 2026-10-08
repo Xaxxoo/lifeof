@@ -44,6 +44,8 @@ export interface CharacterDoc {
   gigStats: { done: number; rating: number } | null;
   moodlets: { id: string; label: string; value: number; expiresAt: number }[];
   rent: { perWeek: number; owed: number };
+  homeId: string | null;
+  unlocks: { paints: string[]; floors: string[] };
   shiftWeek: { period: string; count: number };
 }
 
@@ -127,3 +129,25 @@ export interface GigOffer {
   steps: { place: string }[];
   locked?: string;
 }
+
+export interface HomeDoc {
+  id: string;
+  kind: "rental" | "lot";
+  defId: string;
+  layout: import("@nyl/content").HomeLayout;
+  ownerId?: string;
+}
+
+export interface HomesMine {
+  residenceId: string;
+  homes: HomeDoc[];
+  unlocks: { paints: string[]; floors: string[] };
+  rentPerWeek: number;
+  tiers: { id: string; name: string; neighborhood: string; rentPerWeek: number; moveIn: number; blurb: string; width: number; height: number }[];
+  lots: { id: string; name: string; neighborhood: string; width: number; height: number; price: number; blurb: string }[];
+}
+
+export type BuildOp =
+  | { op: "add"; seg: import("@nyl/content").WallSeg }
+  | { op: "remove"; x: number; y: number; side: "n" | "w" }
+  | { op: "floor"; x: number; y: number; floorId: string | null };

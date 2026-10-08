@@ -1,6 +1,6 @@
 "use client";
 
-import { ACTIONS } from "@nyl/content";
+import { ACTIONS, SHIFT_MINUTES } from "@nyl/content";
 
 function duration(ms: number) {
   if (ms === 0) return "";
@@ -41,7 +41,7 @@ export function ActionMenu({
               className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2.5 text-left text-sm hover:bg-white/10"
             >
               <span>{a.label}</span>
-              <span className="text-xs text-white/50">{a.kind === "work" ? "20 min shift" : duration(a.durationMs)}</span>
+              <span className="text-xs text-white/50">{a.kind === "work" ? `${SHIFT_MINUTES} min shift` : duration(a.durationMs)}</span>
             </button>
           );
         })}

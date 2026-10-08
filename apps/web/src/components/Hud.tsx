@@ -53,6 +53,7 @@ interface HudProps {
   buildMode: boolean;
   onToggleBuild: () => void;
   onOpenPhone: () => void;
+  onOpenMap: () => void;
   hideBottomPanels: boolean;
 }
 
@@ -68,6 +69,7 @@ export function Hud({
   buildMode,
   onToggleBuild,
   onOpenPhone,
+  onOpenMap,
   hideBottomPanels,
 }: HudProps) {
   const [todayOpen, setTodayOpen] = useState(false);
@@ -208,11 +210,15 @@ export function Hud({
           {isHome && (
             <button
               onClick={onToggleBuild}
+              aria-label="Build"
               className={`shrink-0 rounded-full px-3 py-2.5 text-sm font-semibold ${buildMode ? "bg-white text-black" : "bg-black/65 text-white backdrop-blur"}`}
             >
               🛠️
             </button>
           )}
+          <button onClick={onOpenMap} aria-label="Map" className="shrink-0 rounded-full bg-white px-3 py-2.5 text-sm shadow-lg">
+            🗺️
+          </button>
           <button onClick={onOpenPhone} aria-label="Phone" className="shrink-0 rounded-full bg-black/65 px-3 py-2.5 text-sm backdrop-blur">
             📱
           </button>

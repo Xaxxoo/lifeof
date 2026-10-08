@@ -6,6 +6,13 @@
   --color-brick: #8e4a35;
   --color-tile: #f4f1ea;
   --color-mta: #0039a6;
+  --animate-phone-in: phone-in 0.28s ease-out;
+  @keyframes phone-in {
+    from {
+      transform: translateY(40px) scale(0.96);
+      opacity: 0;
+    }
+  }
 }
 
 html,

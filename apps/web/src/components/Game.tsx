@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, initSession } from "@/lib/api";
 import { usePolling } from "@/lib/hooks";
-import { useGame } from "@/lib/store";
+import { serverNow, useGame } from "@/lib/store";
 import { SocketProvider, useSocket, useSocketEvent } from "@/lib/SocketContext";
 import { ArrivalIntro } from "./ArrivalIntro";
 import { CreateCharacter } from "./CreateCharacter";
@@ -57,12 +57,29 @@ export function Game() {
   );
 }
 
+/**
+ * After boarding, hold the street on screen until we've walked down the subway stairs,
+ * then switch to the train (or work).
+ */
+function useHeldRoom(roomId: string | null) {
+  const descendUntil = useGame((s) => s.descendUntil);
+  const lastRoomId = useGame((s) => s.lastRoomId);
+  const [, tick] = useState(0);
+  const holding = (roomId === "transit" || roomId === "work") && !!descendUntil && serverNow() < descendUntil && !!lastRoomId;
+  useEffect(() => {
+    if (!holding || !descendUntil) return;
+    const id = setTimeout(() => tick((n) => n + 1), Math.max(0, descendUntil - serverNow()) + 20);
+    return () => clearTimeout(id);
+  }, [holding, descendUntil]);
+  return holding ? lastRoomId : roomId;
+}
+
 /** Joins once, keeps the heartbeat going, and swaps scenes when the server moves us between rooms. */
 function Session() {
   const setClockOffset = useGame((s) => s.setClockOffset);
   const setLocalIntent = useGame((s) => s.setLocalIntent);
   const [joined, setJoined] = useState(false);
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [liveRoomId, setRoomId] = useState<string | null>(null);
   const { socket, connected, subscribeRoom } = useSocket();
 
   // Listen for server-pushed room changes
@@ -79,6 +96,7 @@ function Session() {
       setRoomId(whereResult.roomId);
     }
   }, [connected, whereResult]);
+  const roomId = useHeldRoom(liveRoomId);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,8 +131,8 @@ function Session() {
 
   // Subscribe to room via socket when room changes
   useEffect(() => {
-    if (roomId && joined) subscribeRoom(roomId);
-  }, [roomId, joined, subscribeRoom]);
+    if (liveRoomId && joined) subscribeRoom(liveRoomId);
+  }, [liveRoomId, joined, subscribeRoom]);
 
   // A new room means a new scene; drop any optimistic path from the old one.
   useEffect(() => setLocalIntent(null), [roomId, setLocalIntent]);

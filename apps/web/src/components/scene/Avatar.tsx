@@ -7,6 +7,7 @@ import { poseAt, type MoveIntent } from "@nyl/game-core";
 import type { Look } from "@nyl/content";
 import { serverNow } from "@/lib/store";
 import { AvatarBody, type Pose } from "./AvatarBody";
+import { STAIR_DEPTH, STAIR_MS } from "./SubwayEntrance";
 
 /** Where to put the avatar once an action starts (on the bed, on the sofa, facing the stove). */
 export interface ActivityAnchor {
@@ -18,6 +19,8 @@ export interface ActivityAnchor {
   at: { x: number; z: number; y: number } | null;
   /** Face this point while standing at it. */
   faceTo: { x: number; z: number } | null;
+  /** Walk down these subway stairs once the action starts. */
+  descend?: { top: { x: number; z: number }; bottom: { x: number; z: number } } | null;
 }
 
 export interface AvatarProps {
@@ -25,9 +28,11 @@ export interface AvatarProps {
   intent: MoveIntent;
   isMe: boolean;
   anchor?: ActivityAnchor | null;
+  /** Just off the train: climb up these stairs, starting at this time. */
+  emerge?: { at: number; top: { x: number; z: number }; bottom: { x: number; z: number } } | null;
 }
 
-export function Avatar({ look, intent, isMe, anchor }: AvatarProps) {
+export function Avatar({ look, intent, isMe, anchor, emerge }: AvatarProps) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
   const posed = useRef<Group>(null);
@@ -38,6 +43,17 @@ export function Avatar({ look, intent, isMe, anchor }: AvatarProps) {
     const acting = !!anchor && now >= anchor.startsAt;
     const r = root.current;
     if (!r) return;
+    // Down the subway stairs, or back up them after the ride.
+    const stairs = acting && anchor.descend ? { ...anchor.descend, k: Math.min(1, (now - anchor.startsAt) / STAIR_MS) } : null;
+    const up = !stairs && emerge && now - emerge.at < STAIR_MS ? { ...emerge, k: 1 - Math.max(0, (now - emerge.at) / STAIR_MS) } : null;
+    const s = stairs ?? up;
+    if (s) {
+      const from = stairs ? { x: pose.x + 0.5, z: pose.y + 0.5 } : s.top;
+      r.position.set(from.x + (s.bottom.x - from.x) * s.k, -STAIR_DEPTH * s.k, from.z + (s.bottom.z - from.z) * s.k);
+      r.rotation.y = Math.atan2(s.bottom.x - s.top.x, s.bottom.z - s.top.z) + (stairs ? 0 : Math.PI);
+      if (body.current) body.current.position.y = Math.abs(Math.sin(now / 90)) * 0.05;
+      return;
+    }
     if (acting && anchor.at && anchor.pose !== "stand") {
       r.position.set(anchor.at.x, anchor.at.y, anchor.at.z);
     } else {
@@ -59,7 +75,7 @@ export function Avatar({ look, intent, isMe, anchor }: AvatarProps) {
 
   const currentPose: Pose = anchor?.active ? anchor.pose : "stand";
   return (
-    <group ref={root}>
+    <group ref={root} renderOrder={4}>
       <group ref={posed}>
         <group ref={body}>
           <AvatarBody look={look} pose={currentPose === "sit" ? "sit" : "stand"} />

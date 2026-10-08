@@ -21,7 +21,7 @@ import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { CharacterPreview } from "./CharacterPreview";
 
-export function CreateCharacter() {
+export function CreateCharacter({ onCreated }: { onCreated?: (data: { name: string; origin: string }) => void } = {}) {
   const [name, setName] = useState("");
   const [look, setLook] = useState<Look>(DEFAULT_LOOK);
   const [origin, setOrigin] = useState<string>(ORIGINS[0].id);
@@ -41,6 +41,7 @@ export function CreateCharacter() {
     setError(null);
     try {
       await api.createCharacter({ name, origin, status, trait, gender, sexuality, look });
+      onCreated?.({ name, origin });
     } catch (e) {
       setError(playerMessage(e));
       setBusy(false);

@@ -5,6 +5,7 @@ import { api, initSession } from "@/lib/api";
 import { usePolling } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
 import { SocketProvider, useSocket, useSocketEvent } from "@/lib/SocketContext";
+import { ArrivalIntro } from "./ArrivalIntro";
 import { CreateCharacter } from "./CreateCharacter";
 import { Splash } from "./GameLoader";
 import { Toasts } from "./Toasts";
@@ -17,6 +18,14 @@ const HEARTBEAT_MS = 15_000;
 export function Game() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [introData, setIntroData] = useState<{ name: string; origin: string } | null>(null);
+
+  const handleCreated = useCallback((data: { name: string; origin: string }) => {
+    if (data.origin === "bk-native") return;
+    setIntroData(data);
+  }, []);
+
+  const clearIntro = useCallback(() => setIntroData(null), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +48,8 @@ export function Game() {
 
   if (error) return <Splash note={`API unreachable — retrying… (${error})`} />;
   if (!ready || me === undefined) return <Splash />;
-  if (me === null) return <CreateCharacter />;
+  if (me === null) return <CreateCharacter onCreated={handleCreated} />;
+  if (introData) return <ArrivalIntro name={introData.name} origin={introData.origin} onComplete={clearIntro} />;
   return (
     <SocketProvider>
       <Session />

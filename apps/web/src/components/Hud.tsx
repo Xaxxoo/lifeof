@@ -17,6 +17,7 @@ import { GIG_BY_ID, ROOMS } from "@nyl/content";
 import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { useGame } from "@/lib/store";
+import { useSocket } from "@/lib/SocketContext";
 import type { CharacterDoc, CityStateDoc } from "@/lib/types";
 
 const NEED_LABEL: Record<NeedKey, string> = {
@@ -307,6 +308,7 @@ function Section({ title, source, children }: { title: string; source: "live" | 
 
 function ChatBar({ roomId }: { roomId: string }) {
   const [text, setText] = useState("");
+  const { socket, connected } = useSocket();
   return (
     <form
       className="flex min-w-0 flex-1 gap-2"
@@ -315,7 +317,11 @@ function ChatBar({ roomId }: { roomId: string }) {
         const body = text.trim();
         if (!body) return;
         setText("");
-        void api.sendChat({ roomId, body }).catch(() => undefined);
+        if (connected) {
+          socket.emit("chat:send", { roomId, body });
+        } else {
+          void api.sendChat({ roomId, body }).catch(() => undefined);
+        }
       }}
     >
       <input

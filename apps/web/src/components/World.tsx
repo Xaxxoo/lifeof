@@ -21,6 +21,8 @@ import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
+import { useSocket } from "@/lib/SocketContext";
+import { useRealtimeChat, useRealtimeOccupants } from "@/lib/useRealtimeData";
 import type { CharacterDoc, CityStateDoc, MessageDoc, Occupant, PlacedObjectDoc } from "@/lib/types";
 import { ActionMenu } from "./ActionMenu";
 import { BuildPanel, type Ghost } from "./BuildPanel";
@@ -59,14 +61,12 @@ export function World({ roomId }: { roomId: string }) {
   const rawObjectDocs = rawObjects ?? [];
   const layout = useMemo(() => buildRoomLayout(room, objects), [room, objects]);
 
+  const { socket, connected } = useSocket();
+
   const meFetcher = useCallback(() => api.me(), []);
   const me = usePolling(meFetcher, 4000) as CharacterDoc | null | undefined;
-  const occupantsFetcher = useCallback(() => api.occupants(roomId), [roomId]);
-  const occupantsRaw = usePolling(occupantsFetcher, 3000);
-  const occupants: Occupant[] = occupantsRaw ?? [];
-  const chatFetcher = useCallback(() => api.recentChat(roomId), [roomId]);
-  const messagesRaw = usePolling(chatFetcher, 2000);
-  const messages: MessageDoc[] = messagesRaw ?? [];
+  const occupants: Occupant[] = useRealtimeOccupants(roomId);
+  const messages: MessageDoc[] = useRealtimeChat(roomId);
   const cityFetcher = useCallback(() => api.city(), []);
   const city = usePolling(cityFetcher, 30000) as CityStateDoc | null | undefined;
 
@@ -105,7 +105,11 @@ export function World({ roomId }: { roomId: string }) {
     const path = findPath(layout.grid, tileAt(myIntent, serverNow()), { x, y });
     if (!path) return;
     setLocalIntent({ path, startedAt: serverNow() });
-    void api.move({ x, y }).catch((e) => toast(playerMessage(e), "error"));
+    if (connected) {
+      socket.emit("world:move", { target: { x, y } });
+    } else {
+      void api.move({ x, y }).catch((e) => toast(playerMessage(e), "error"));
+    }
   }
 
   function onTileClick(x: number, y: number) {

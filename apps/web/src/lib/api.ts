@@ -43,27 +43,39 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
 
   const text = await res.text();
-  return text ? JSON.parse(text) : (undefined as T);
+  return text ? JSON.parse(text) : (null as T);
 }
 
-/** Ensure a guest JWT exists; create one if not. */
+function clearJwt() {
+  try { localStorage.removeItem(JWT_KEY); } catch { /* */ }
+}
+
+/** Ensure a valid guest JWT exists; create one if missing or expired. */
 export async function initSession(): Promise<void> {
-  if (getJwt()) return;
-  const data = await request<{ token: string }>("POST", "/auth/guest");
-  setJwt(data.token);
+  if (getJwt()) {
+    // Validate the existing JWT with a lightweight call
+    try {
+      await request<unknown>("GET", "/characters/me");
+      return;
+    } catch {
+      clearJwt();
+    }
+  }
+  const data = await request<{ jwt: string }>("POST", "/auth/guest");
+  setJwt(data.jwt);
 }
 
 export const api = {
   // Characters
   me: () => request<CharacterDoc | null>("GET", "/characters/me"),
-  createCharacter: async (body: { name: string; origin: string; status: string; trait: string; look: unknown }) => {
-    const data = await request<{ token: string }>("POST", "/characters", body);
-    setJwt(data.token);
+  createCharacter: async (body: { name: string; origin: string; status: string; trait: string; gender: string; sexuality: string; look: unknown }) => {
+    const data = await request<{ character: CharacterDoc; jwt: string }>("POST", "/characters", body);
+    setJwt(data.jwt);
     return data;
   },
 
   // World
-  join: () => request<{ serverNow: number }>("POST", "/world/join"),
+  join: () => request<{ serverNow: number; roomId: string }>("POST", "/world/join"),
   move: (target: { x: number; y: number }) => request<void>("POST", "/world/move", { target }),
   heartbeat: () => request<void>("POST", "/world/heartbeat"),
   leave: () => request<void>("POST", "/world/leave"),

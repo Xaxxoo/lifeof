@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, initSession } from "@/lib/api";
 import { usePolling } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
+import { SocketProvider, useSocket, useSocketEvent } from "@/lib/SocketContext";
 import { CreateCharacter } from "./CreateCharacter";
 import { Splash } from "./GameLoader";
 import { Toasts } from "./Toasts";
@@ -15,17 +16,35 @@ const HEARTBEAT_MS = 15_000;
 
 export function Game() {
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    initSession().then(() => setReady(true));
-  }, []);
+    let cancelled = false;
+    const attempt = () => {
+      setError(null);
+      initSession()
+        .then(() => { if (!cancelled) setReady(true); })
+        .catch((e) => {
+          if (!cancelled) setError(e instanceof Error ? e.message : "Cannot reach server");
+        });
+    };
+    attempt();
+    // Retry every 5s if the API is down
+    const id = setInterval(() => { if (!cancelled && !ready) attempt(); }, 5000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [ready]);
 
   const meFetcher = useCallback(() => api.me(), []);
   const me = usePolling(ready ? meFetcher : null, 4000);
 
+  if (error) return <Splash note={`API unreachable — retrying… (${error})`} />;
   if (!ready || me === undefined) return <Splash />;
   if (me === null) return <CreateCharacter />;
-  return <Session />;
+  return (
+    <SocketProvider>
+      <Session />
+    </SocketProvider>
+  );
 }
 
 /** Joins once, keeps the heartbeat going, and swaps scenes when the server moves us between rooms. */
@@ -33,29 +52,59 @@ function Session() {
   const setClockOffset = useGame((s) => s.setClockOffset);
   const setLocalIntent = useGame((s) => s.setLocalIntent);
   const [joined, setJoined] = useState(false);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const { socket, connected, subscribeRoom } = useSocket();
 
+  // Listen for server-pushed room changes
+  useSocketEvent<{ roomId: string }>("room:changed", (data) => {
+    setRoomId(data.roomId);
+  });
+
+  // Fallback: poll whereAmI when disconnected
   const whereAmIFetcher = useCallback(() => api.whereAmI(), []);
-  const whereResult = usePolling(joined ? whereAmIFetcher : null, 4000);
-  const roomId = whereResult?.roomId ?? null;
+  const whereResult = usePolling(joined && !connected ? whereAmIFetcher : null, 4000);
+
+  useEffect(() => {
+    if (!connected && whereResult?.roomId) {
+      setRoomId(whereResult.roomId);
+    }
+  }, [connected, whereResult]);
 
   useEffect(() => {
     let cancelled = false;
     const sentAt = Date.now();
-    api.join().then(({ serverNow }) => {
+    api.join().then(({ serverNow, roomId: joinedRoom }) => {
       if (cancelled) return;
       const receivedAt = Date.now();
       setClockOffset(serverNow - (sentAt + receivedAt) / 2);
+      setRoomId(joinedRoom);
       setJoined(true);
     });
-    const beat = setInterval(() => void api.heartbeat(), HEARTBEAT_MS);
     const onHide = () => void api.leave();
     window.addEventListener("pagehide", onHide);
     return () => {
       cancelled = true;
-      clearInterval(beat);
       window.removeEventListener("pagehide", onHide);
     };
   }, [setClockOffset]);
+
+  // Socket heartbeat (fallback to REST when disconnected)
+  useEffect(() => {
+    if (!joined) return;
+    const beat = setInterval(() => {
+      if (connected) {
+        socket.emit("world:heartbeat");
+      } else {
+        void api.heartbeat();
+      }
+    }, HEARTBEAT_MS);
+    return () => clearInterval(beat);
+  }, [joined, connected, socket]);
+
+  // Subscribe to room via socket when room changes
+  useEffect(() => {
+    if (roomId && joined) subscribeRoom(roomId);
+  }, [roomId, joined, subscribeRoom]);
 
   // A new room means a new scene; drop any optimistic path from the old one.
   useEffect(() => setLocalIntent(null), [roomId, setLocalIntent]);

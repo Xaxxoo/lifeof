@@ -120,7 +120,7 @@ export class WorldService {
     if (!path) return { ok: false as const };
     await this.presenceRepo.update(p.id, { path, startedAt: now, updatedAt: now });
     await this.characters.update(c.id, { lastSeenAt: now });
-    return { ok: true as const };
+    return { ok: true as const, characterId: c.id, path, startedAt: now };
   }
 
   async heartbeat(token: string) {

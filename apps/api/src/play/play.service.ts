@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from "@nestjs/common";
+import { Injectable, BadRequestException, Inject, forwardRef } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import {
@@ -40,6 +40,7 @@ import { WorldService } from "../world/world.service";
 import { BankService } from "../bank/bank.service";
 import { GigsService } from "../gigs/gigs.service";
 import { CityService } from "../city/city.service";
+import { EventsGateway } from "../events/events.gateway";
 
 const HOUR = 3_600_000;
 const TRAIN_DELAY_MS = 2 * 60_000;
@@ -78,6 +79,7 @@ export class PlayService {
     private bank: BankService,
     private gigs: GigsService,
     private city: CityService,
+    @Inject(forwardRef(() => EventsGateway)) private gateway: EventsGateway,
   ) {}
 
   async start(token: string, target: string, actionId: string, dest?: string) {
@@ -223,6 +225,11 @@ export class PlayService {
         rideMoment,
         rideLines,
       },
+    });
+
+    this.gateway.broadcastToRoom(p.roomId, "activity:start", {
+      characterId: c.id,
+      activity: { status, pose: action.pose ?? "stand", startsAt, endsAt, target },
     });
 
     if (action.kind === "work" || action.kind === "ride") {
@@ -375,6 +382,16 @@ export class PlayService {
       moodlets,
       activity: null,
     });
+
+    // Broadcast activity lifecycle events via WebSocket
+    if (patch.roomId && patch.roomId !== a.roomId) {
+      // Player changed rooms
+      this.gateway.handleRoomChange(c.id, a.roomId, patch.roomId);
+    } else if (early) {
+      this.gateway.broadcastToRoom(a.roomId, "activity:stop", { characterId: c.id });
+    } else {
+      this.gateway.broadcastToRoom(a.roomId, "activity:complete", { characterId: c.id });
+    }
   }
 
   /** In-process timer to replace Convex scheduler. */

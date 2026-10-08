@@ -14,12 +14,12 @@ export class ChatService {
     @InjectRepository(Message) private messages: Repository<Message>,
   ) {}
 
-  async say(token: string, roomId: string, body: string) {
+  async say(token: string, roomId: string, body: string): Promise<Message | null> {
     const c = await this.requireByToken(token);
     const text = body.trim().slice(0, MAX_LEN);
-    if (!text) return;
+    if (!text) return null;
     if (BLOCKED.some((r) => r.test(text))) throw new BadRequestException("That message can't be sent");
-    await this.messages.save({ roomId, characterId: c.id, name: c.name, body: text });
+    return this.messages.save({ roomId, characterId: c.id, name: c.name, body: text });
   }
 
   async recent(roomId: string) {

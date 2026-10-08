@@ -14,6 +14,7 @@ import { BuildModule } from "./build/build.module";
 import { CityModule } from "./city/city.module";
 import { ChatModule } from "./chat/chat.module";
 import { TransitModule } from "./transit/transit.module";
+import { EventsModule } from "./events/events.module";
 import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
 
 @Module({
@@ -36,6 +37,7 @@ import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
     CityModule,
     ChatModule,
     TransitModule,
+    EventsModule,
   ],
   providers: [ScheduledTasksService],
 })

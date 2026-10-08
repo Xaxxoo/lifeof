@@ -8,6 +8,7 @@ import { WorldModule } from "../world/world.module";
 import { BankModule } from "../bank/bank.module";
 import { GigsModule } from "../gigs/gigs.module";
 import { CityModule } from "../city/city.module";
+import { EventsModule } from "../events/events.module";
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CityModule } from "../city/city.module";
     BankModule,
     forwardRef(() => GigsModule),
     CityModule,
+    forwardRef(() => EventsModule),
   ],
   controllers: [PlayController],
   providers: [PlayService],

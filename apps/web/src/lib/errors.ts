@@ -1,6 +1,5 @@
-/** Convex wraps thrown errors in request metadata; pull out the sentence meant for the player. */
+/** Extract a player-facing error message from a REST API error or plain Error. */
 export function playerMessage(e: unknown): string {
-  const raw = e instanceof Error ? e.message : String(e);
-  const m = raw.match(/Uncaught Error: ([^\n]+)/);
-  return (m?.[1] ?? raw.split("\n")[0] ?? "Something went wrong").trim();
+  if (e instanceof Error) return e.message || "Something went wrong";
+  return String(e) || "Something went wrong";
 }

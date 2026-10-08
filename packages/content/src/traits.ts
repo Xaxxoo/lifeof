@@ -12,6 +12,27 @@ export const TRAITS = [
 export type TraitId = (typeof TRAITS)[number]["id"];
 export const TRAIT_IDS = TRAITS.map((t) => t.id) as [TraitId, ...TraitId[]];
 
+export const GENDERS = [
+  { id: "man", name: "Man" },
+  { id: "woman", name: "Woman" },
+  { id: "non-binary", name: "Non-binary" },
+  { id: "prefer-not", name: "Prefer not to say" },
+] as const;
+
+export type GenderId = (typeof GENDERS)[number]["id"];
+export const GENDER_IDS = GENDERS.map((g) => g.id) as [GenderId, ...GenderId[]];
+
+export const SEXUALITIES = [
+  { id: "straight", name: "Straight" },
+  { id: "gay", name: "Gay" },
+  { id: "lesbian", name: "Lesbian" },
+  { id: "bisexual", name: "Bisexual" },
+  { id: "prefer-not", name: "Prefer not to say" },
+] as const;
+
+export type SexualityId = (typeof SEXUALITIES)[number]["id"];
+export const SEXUALITY_IDS = SEXUALITIES.map((s) => s.id) as [SexualityId, ...SexualityId[]];
+
 export const SKIN_TONES = [
   "#f6d7c3", "#eac0a2", "#d9a47f", "#c68863", "#b0714d", "#9a5d3d",
   "#86502f", "#714226", "#5e361f", "#4d2c1a", "#3e2416", "#311c11",

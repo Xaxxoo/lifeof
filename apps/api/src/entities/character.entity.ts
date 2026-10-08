@@ -20,6 +20,12 @@ export class Character {
   @Column({ type: "varchar" })
   trait!: string;
 
+  @Column({ type: "varchar", default: "prefer-not" })
+  gender!: string;
+
+  @Column({ type: "varchar", default: "prefer-not" })
+  sexuality!: string;
+
   @Column({ type: "jsonb" })
   look!: { skin: string; shirt: string; pants: string; hair: string; hairColor: string };
 

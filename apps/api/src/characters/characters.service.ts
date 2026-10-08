@@ -4,6 +4,8 @@ import { Repository } from "typeorm";
 import { emptySkills, rentPeriodKey, startingNeeds } from "@nyl/game-core";
 import {
   BASEMENT_STARTER,
+  GENDER_IDS,
+  SEXUALITY_IDS,
   HAIR_COLORS,
   HAIR_STYLE_IDS,
   HOME_RENT_PER_WEEK,
@@ -53,6 +55,8 @@ export class CharactersService {
     origin: string;
     status: string;
     trait: string;
+    gender: string;
+    sexuality: string;
     look: { skin: string; shirt: string; pants: string; hair: string; hairColor: string };
   }) {
     const name = args.name.trim();
@@ -61,6 +65,8 @@ export class CharactersService {
 
     oneOf(ORIGIN_IDS, args.origin, "origin");
     oneOf(TRAIT_IDS, args.trait, "trait");
+    oneOf(GENDER_IDS, args.gender, "gender");
+    oneOf(SEXUALITY_IDS, args.sexuality, "sexuality");
     oneOf(SKIN_TONES, args.look.skin, "skin tone");
     oneOf(SHIRT_COLORS, args.look.shirt, "shirt color");
     oneOf(PANTS_COLORS, args.look.pants, "pants color");
@@ -80,6 +86,8 @@ export class CharactersService {
       origin: args.origin,
       status: args.status,
       trait: args.trait,
+      gender: args.gender,
+      sexuality: args.sexuality,
       look: args.look,
       cash: 0,
       needs: startingNeeds(),

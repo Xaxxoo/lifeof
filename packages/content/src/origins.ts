@@ -36,6 +36,12 @@ export const ORIGINS = [
     perk: "Starts with $1,000 extra, no community anchor",
     anchor: "None: build a network from zero",
   },
+  {
+    id: "bk-native",
+    name: "Born and bred, Brooklyn",
+    perk: "Knows every block — subway rides 15% faster",
+    anchor: "Family still on the block",
+  },
 ] as const;
 
 export type OriginId = (typeof ORIGINS)[number]["id"];

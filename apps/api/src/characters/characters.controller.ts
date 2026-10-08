@@ -26,6 +26,8 @@ export class CharactersController {
       origin: string;
       status: string;
       trait: string;
+      gender: string;
+      sexuality: string;
       look: { skin: string; shirt: string; pants: string; hair: string; hairColor: string };
     },
   ) {

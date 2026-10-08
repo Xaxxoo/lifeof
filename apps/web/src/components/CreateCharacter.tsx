@@ -3,6 +3,8 @@
 import { useState } from "react";
 import {
   DEFAULT_LOOK,
+  GENDERS,
+  SEXUALITIES,
   HAIR_COLORS,
   HAIR_STYLES,
   ORIGINS,
@@ -25,6 +27,8 @@ export function CreateCharacter() {
   const [origin, setOrigin] = useState<string>(ORIGINS[0].id);
   const [status, setStatus] = useState<string>(STATUSES[0].id);
   const [trait, setTrait] = useState<string>(TRAITS[0].id);
+  const [gender, setGender] = useState<string>(GENDERS[0].id);
+  const [sexuality, setSexuality] = useState<string>(SEXUALITIES[0].id);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -36,7 +40,7 @@ export function CreateCharacter() {
     setBusy(true);
     setError(null);
     try {
-      await api.createCharacter({ name, origin, status, trait, look });
+      await api.createCharacter({ name, origin, status, trait, gender, sexuality, look });
     } catch (e) {
       setError(playerMessage(e));
       setBusy(false);
@@ -65,6 +69,26 @@ export function CreateCharacter() {
                 placeholder="What should Brooklyn call you?"
                 className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base outline-none focus:border-white/40"
               />
+            </Field>
+
+            <Field label="Gender">
+              <div className="flex flex-wrap gap-2">
+                {GENDERS.map((g) => (
+                  <Pill key={g.id} selected={gender === g.id} onClick={() => setGender(g.id)}>
+                    {g.name}
+                  </Pill>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="Sexuality">
+              <div className="flex flex-wrap gap-2">
+                {SEXUALITIES.map((s) => (
+                  <Pill key={s.id} selected={sexuality === s.id} onClick={() => setSexuality(s.id)}>
+                    {s.name}
+                  </Pill>
+                ))}
+              </div>
             </Field>
 
             <Field label="Skin tone">

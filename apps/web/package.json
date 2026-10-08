@@ -7,14 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@nyl/content": "*",
     "@nyl/game-core": "*",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
-    "convex": "^1.46.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

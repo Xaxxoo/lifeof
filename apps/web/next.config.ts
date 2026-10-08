@@ -9,7 +9,6 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "192.168.*.*"],
   transpilePackages: ["@nyl/game-core", "@nyl/content"],
   turbopack: {
-    // Monorepo root, so the app can import convex/_generated from outside apps/web.
     root: path.join(__dirname, "../.."),
     rules: {
       "*.css": {

@@ -9,7 +9,3 @@ dist/
 .DS_Store
 .vercel
 coverage/
-
-# Convex local backend data
-.convex/
-convex/.env*

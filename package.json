@@ -8,18 +8,15 @@
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
     "dev:api": "npm run start:dev --workspace=apps/api",
-    "dev:convex": "convex dev",
     "build": "npm run build --workspace=apps/web",
     "test": "npm run test --workspace=packages/game-core && npm run test --workspace=packages/content",
-    "typecheck": "tsc -p packages/game-core && tsc -p packages/content && tsc -p convex && npm run typecheck --workspace=apps/web",
+    "typecheck": "tsc -p packages/game-core && tsc -p packages/content && npm run typecheck --workspace=apps/web",
     "lint": "npm run lint --workspace=apps/web"
   },
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "convex": "^1.46.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.20.5",
     "typescript": "^6.0.3",

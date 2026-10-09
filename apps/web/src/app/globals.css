@@ -6,11 +6,104 @@
   --color-brick: #8e4a35;
   --color-tile: #f4f1ea;
   --color-mta: #0039a6;
+
   --animate-phone-in: phone-in 0.28s ease-out;
   @keyframes phone-in {
     from {
       transform: translateY(40px) scale(0.96);
       opacity: 0;
+    }
+  }
+
+  --animate-fade-up: fade-up 0.8s ease-out both;
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
+  --animate-fade-in: fade-in 0.6s ease-out both;
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  --animate-glow-pulse: glow-pulse 4s ease-in-out infinite;
+  @keyframes glow-pulse {
+    0%,
+    100% {
+      text-shadow:
+        0 0 40px rgba(255, 154, 213, 0.15),
+        0 0 80px rgba(184, 162, 200, 0.08);
+    }
+    50% {
+      text-shadow:
+        0 0 80px rgba(255, 154, 213, 0.35),
+        0 0 140px rgba(184, 162, 200, 0.2);
+    }
+  }
+
+  --animate-gradient-x: gradient-x 6s ease-in-out infinite;
+  @keyframes gradient-x {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  --animate-float-up: float-up 14s linear infinite;
+  @keyframes float-up {
+    0% {
+      transform: translateY(0) translateX(0);
+      opacity: 0;
+    }
+    5% {
+      opacity: 0.7;
+    }
+    90% {
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(-100vh) translateX(30px);
+      opacity: 0;
+    }
+  }
+
+  --animate-marquee-left: marquee-left 40s linear infinite;
+  @keyframes marquee-left {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  --animate-marquee-right: marquee-right 40s linear infinite;
+  @keyframes marquee-right {
+    from {
+      transform: translateX(-50%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  --animate-subway-light: subway-light 4s ease-in-out infinite;
+  @keyframes subway-light {
+    0% {
+      left: -10%;
+    }
+    40% {
+      left: 110%;
+    }
+    100% {
+      left: 110%;
     }
   }
 }

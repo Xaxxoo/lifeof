@@ -21,9 +21,8 @@ export class PlayController {
   }
 
   @Post("finish")
-  async finish(@Req() req: { user: { characterId: string } }) {
-    // Manual finish: the client thinks the timer is done. Let complete() verify.
-    // In practice the server timer fires; this is a fallback.
+  async finish(@Req() req: { user: { token: string } }) {
+    await this.play.tryFinish(req.user.token);
     return { ok: true };
   }
 }

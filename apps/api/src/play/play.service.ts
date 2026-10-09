@@ -1,6 +1,6 @@
-import { Injectable, BadRequestException, Inject, forwardRef } from "@nestjs/common";
+import { Injectable, BadRequestException, Inject, forwardRef, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, LessThanOrEqual, Not, IsNull, In } from "typeorm";
 import {
   activityProgress,
   applyNeedDelta,
@@ -72,6 +72,7 @@ function hash(s: string) {
 
 @Injectable()
 export class PlayService {
+  private readonly logger = new Logger(PlayService.name);
   private pendingTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -261,6 +262,14 @@ export class PlayService {
     if (c.activity) await this.cancelActivity(c, Date.now());
   }
 
+  /** Client fallback: finish an activity whose endsAt has passed. */
+  async tryFinish(token: string) {
+    const c = await this.requireByToken(token);
+    if (!c.activity) return;
+    if (Date.now() < c.activity.endsAt) throw new BadRequestException("Activity not done yet");
+    await this.complete(c.id, c.activity.id);
+  }
+
   async board(characterId: string, activityId: string) {
     const c = await this.characters.findOneBy({ id: characterId });
     if (!c?.activity || c.activity.id !== activityId) return;
@@ -424,6 +433,46 @@ export class PlayService {
       }
     }, Math.max(0, delayMs));
     this.pendingTimers.set(String(id), id);
+  }
+
+  /** Sweep activities whose endsAt has passed — safety net for lost timers. */
+  async sweepExpiredActivities(): Promise<number> {
+    const now = Date.now();
+    const stuck = await this.characters
+      .createQueryBuilder("c")
+      .where("c.activity IS NOT NULL")
+      .andWhere("(c.activity->>'endsAt')::bigint <= :now", { now })
+      .getMany();
+    for (const c of stuck) {
+      try {
+        await this.finishActivity(c, now, false);
+      } catch (err) {
+        this.logger.warn(`sweepExpired failed for ${c.id}`, err);
+      }
+    }
+    if (stuck.length) this.logger.log(`Swept ${stuck.length} expired activities`);
+    return stuck.length;
+  }
+
+  /** Sweep characters stuck pre-board (ride/work started but still in original room). */
+  async sweepPendingBoards(): Promise<number> {
+    const now = Date.now();
+    const stuck = await this.characters
+      .createQueryBuilder("c")
+      .where("c.activity IS NOT NULL")
+      .andWhere("c.activity->>'kind' IN (:...kinds)", { kinds: ["ride", "work"] })
+      .andWhere("(c.activity->>'startsAt')::bigint <= :now", { now })
+      .andWhere("c.roomId NOT IN (:...boardedRooms)", { boardedRooms: ["transit", "work"] })
+      .getMany();
+    for (const c of stuck) {
+      try {
+        await this.board(c.id, c.activity!.id);
+      } catch (err) {
+        this.logger.warn(`sweepPendingBoards failed for ${c.id}`, err);
+      }
+    }
+    if (stuck.length) this.logger.log(`Swept ${stuck.length} pending boards`);
+    return stuck.length;
   }
 
   private async requireByToken(token: string): Promise<Character> {

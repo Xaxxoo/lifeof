@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Req } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { JwtAuthGuard } from "../auth/auth.guard";
 import { ChatService } from "./chat.service";
 
@@ -8,6 +9,7 @@ export class ChatController {
 
   @Post("send")
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   say(@Req() req: { user: { token: string } }, @Body() body: { roomId: string; body: string }) {
     return this.chat.say(req.user.token, body.roomId, body.body);
   }

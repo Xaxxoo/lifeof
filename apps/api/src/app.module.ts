@@ -1,7 +1,9 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ScheduleModule } from "@nestjs/schedule";
+import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 import { databaseConfig } from "./config/database.config";
 import { AuthModule } from "./auth/auth.module";
 import { CharactersModule } from "./characters/characters.module";
@@ -28,6 +30,7 @@ import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
       useFactory: databaseConfig,
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 60 }] }),
     AuthModule,
     CharactersModule,
     WorldModule,
@@ -43,6 +46,9 @@ import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
     EventsModule,
     HomesModule,
   ],
-  providers: [ScheduledTasksService],
+  providers: [
+    ScheduledTasksService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

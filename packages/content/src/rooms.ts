@@ -12,7 +12,7 @@ export type PropKind =
   | "pew" | "altar" | "stage" | "lane";
 
 /** Tags let gigs pick sensible stops: pick up food at "food", drop off at "residential". */
-export type PropTag = "food" | "residential" | "outdoor" | "business";
+export type PropTag = "food" | "residential" | "outdoor" | "business" | "vendor";
 
 export interface OpenHours {
   /** NYC hours; close may be past midnight. */
@@ -280,14 +280,15 @@ export const CROWN_HEIGHTS = street({
     lamp("lamp-1", 3, 6),
     lamp("lamp-2", 15, 9),
     { id: "hydrant", kind: "hydrant", x: 10, y: 4, w: 1, h: 1 },
+    { id: "cart", kind: "cart", x: 4, y: 7, w: 1, h: 1, label: "Water ice cart", actions: ["snacks"], tags: ["food", "vendor"] },
   ],
   npcs: [
-    { id: "akosua", name: "Auntie Akosua", role: "Runs the Ghanaian shop", origin: "accra", look: look("#4d2c1a", "headwrap", "#e0a526", "#7a4e3a", "#2a9d8f"),
-      x: 9, y: 4, facing: 0, lines: ["You have eaten? Come, the waakye is hot.", "My son in Accra says I work too hard. He is right.", "Bring your friends on Sunday."] },
+    { id: "grace", name: "Auntie Grace", role: "Runs the Ghanaian shop", origin: "accra", look: look("#4d2c1a", "headwrap", "#e0a526", "#7a4e3a", "#2a9d8f"),
+      x: 9, y: 4, facing: 0, lines: ["You have eaten? Come, the waakye is hot.", "My son back home says I work too hard. He is right.", "Bring your friends on Sunday."] },
     { id: "desmond", name: "Desmond", role: "Cook at Allan's Bakery", origin: "kingston", look: look("#3e2416", "locs", "#2f5d3a"),
       x: 5, y: 4, facing: 0, lines: ["Beef or chicken? Don't say veggie, mi beg you.", "The coco bread is fresh, boss.", "Labor Day parade? You ready?"] },
-    { id: "bayo", name: "Brother Bayo", role: "Runs the church's community dinner", origin: "lagos", look: look("#311c11", "fade", "#29335c", "#1b1b1b"),
-      x: 13, y: 4, facing: 0, lines: ["Community dinner every evening. Nobody eats alone.", "Lagos to Brooklyn, God is faithful o.", "Have you called your mother this week?"] },
+    { id: "james", name: "Brother James", role: "Runs the church's community dinner", origin: "lagos", look: look("#311c11", "fade", "#29335c", "#1b1b1b"),
+      x: 13, y: 4, facing: 0, lines: ["Community dinner every evening. Nobody eats alone.", "Long road to Brooklyn, but God is faithful.", "Have you called your mother this week?"] },
   ],
 });
 
@@ -305,7 +306,7 @@ export const BUSHWICK = street({
     { id: "church", label: "St. Barbara's Church", w: 4, color: "#e8d9a8", actions: ["church_service"], tags: ["business"], inside: "church" },
   ],
   extras: [
-    { id: "cart", kind: "cart", x: 2, y: 7, w: 1, h: 1, label: "Halal cart", actions: ["halal"], tags: ["food"] },
+    { id: "cart", kind: "cart", x: 2, y: 7, w: 1, h: 1, label: "Halal cart", actions: ["halal"], tags: ["food", "vendor"] },
     tree("tree-1", 4, 5),
     tree("tree-2", 11, 5),
     bench("bench", 8, 5),
@@ -341,6 +342,7 @@ export const BED_STUY = street({
     tree("tree-2", 10, 5),
     bench("bench", 7, 6),
     lamp("lamp-1", 3, 6),
+    { id: "cart", kind: "cart", x: 9, y: 7, w: 1, h: 1, label: "Incense cart", actions: ["snacks"], tags: ["business", "vendor"] },
   ],
   npcs: [
     { id: "pearl", name: "Miss Pearl", role: "Has lived on this block since 1971", look: look("#5e361f", "puff", "#f15bb5", "#5b4636", "#8f8f8f"),
@@ -368,11 +370,11 @@ export const FLATBUSH = street({
     bench("bench", 9, 5),
     lamp("lamp-1", 2, 6),
     lamp("lamp-2", 14, 6),
-    { id: "cart", kind: "cart", x: 12, y: 7, w: 1, h: 1, label: "Fruit cart", actions: ["fruit"], tags: ["food"] },
+    { id: "cart", kind: "cart", x: 12, y: 7, w: 1, h: 1, label: "Fruit cart", actions: ["fruit"], tags: ["food", "vendor"] },
   ],
   npcs: [
-    { id: "chidi", name: "Chidi", role: "Jollof spot owner", origin: "lagos", look: look("#4d2c1a", "fade", "#2a9d8f"),
-      x: 2, y: 4, facing: 0, lines: ["Party jollof every day. Ghana people, I'm waiting.", "My guy, how far? You don chop?", "Brooklyn is Lagos with snow."] },
+    { id: "marcus", name: "Marcus", role: "Jollof spot owner", origin: "lagos", look: look("#4d2c1a", "fade", "#2a9d8f"),
+      x: 2, y: 4, facing: 0, lines: ["Party jollof every day. Ghana people, I'm waiting.", "What's good? You hungry?", "Brooklyn is home now."] },
     { id: "rose", name: "Mama Rose", role: "Braider, 30 years", look: look("#3e2416", "braids", "#669bbc", "#26324a", "#3b2416"),
       x: 10, y: 4, facing: 0, lines: ["Knotless? Sit, it's six hours, bring snacks.", "Don't touch, let it set.", "My clients come from Philly for these."] },
   ],
@@ -396,7 +398,7 @@ export const WILLIAMSBURG = street({
     tree("tree-2", 12, 6),
     bench("bench", 7, 5),
     lamp("lamp-1", 1, 6),
-    { id: "cart", kind: "cart", x: 10, y: 7, w: 1, h: 1, label: "Smoothie cart", actions: ["smoothie"], tags: ["food"] },
+    { id: "cart", kind: "cart", x: 10, y: 7, w: 1, h: 1, label: "Smoothie cart", actions: ["smoothie"], tags: ["food", "vendor"] },
   ],
   npcs: [
     { id: "brooke", name: "Brooke", role: "Startup founder", look: look("#f6d7c3", "long", "#f3f3f3", "#c9b79c", "#d8b26e"),
@@ -423,6 +425,7 @@ export const DUMBO = street({
     tree("tree-1", 2, 5),
     bench("bench", 10, 5),
     lamp("lamp-1", 14, 6),
+    { id: "cart", kind: "cart", x: 4, y: 7, w: 1, h: 1, label: "Hot dog cart", actions: ["snacks"], tags: ["food", "vendor"] },
   ],
   npcs: [
     { id: "kayla", name: "Kayla", role: "Influencer", look: look("#c68863", "long", "#f15bb5", "#1b1b1b", "#3b2416"),
@@ -458,7 +461,7 @@ export const PROSPECT_PARK: RoomDef = {
     bench("bench", 4, 11),
   ],
   npcs: [
-    { id: "kofi", name: "Kofi", role: "Leads the drum circle", origin: "accra", look: look("#311c11", "locs", "#e0a526"),
+    { id: "andre", name: "Andre", role: "Leads the drum circle", origin: "accra", look: look("#311c11", "locs", "#e0a526"),
       x: 12, y: 3, facing: -Math.PI / 2, lines: ["Feel it, don't count it.", "Every Sunday since 2009.", "Pick up a shaker, nobody's judging."] },
     { id: "sam", name: "Sam", role: "Training for the marathon", look: look("#eac0a2", "fade", "#f3a712", "#1b1b1b", "#a8732f"),
       x: 0, y: 7, facing: Math.PI / 2, lines: ["Mile nine!"],
@@ -528,7 +531,7 @@ export const VENUES: RoomDef[] = [
     npcs: [
       { id: "selector", name: "Selector Ras", role: "Runs the sound", origin: "kingston", look: look("#311c11", "locs", "#2a9d8f"), x: 8, y: 1, facing: 0,
         lines: ["Wheel it, wheel it!", "Bass so heavy the landlord feel it in Queens."] },
-      { id: "ngozi", name: "Ngozi", role: "Nurse, off shift", origin: "lagos", look: look("#4d2c1a", "braids", "#f15bb5"), x: 3, y: 3, facing: Math.PI,
+      { id: "nina", name: "Nina", role: "Nurse, off shift", origin: "lagos", look: look("#4d2c1a", "braids", "#f15bb5"), x: 3, y: 3, facing: Math.PI,
         lines: ["Twelve-hour shift. I deserve this.", "Afrobeats next or I'm leaving."] },
     ],
   }),
@@ -629,6 +632,18 @@ export const isHomeRoom = (roomId: string) => roomId.startsWith("home:");
 export function roomDef(roomId: string): RoomDef | null {
   if (isHomeRoom(roomId)) return { ...BASEMENT_ROOM, id: roomId };
   return ROOMS[roomId] ?? null;
+}
+
+/**
+ * Strip instance suffix from a room id. `venue:warehouse:2` → `venue:warehouse`.
+ * Streets and homes are never instanced, so they pass through unchanged.
+ */
+export function baseRoomId(roomId: string): string {
+  if (isHomeRoom(roomId) || !roomId.includes(":")) return roomId;
+  // Instance suffix is `:N` where N is 1–9 at the very end
+  const m = roomId.match(/^(.+):(\d)$/);
+  if (m && ROOMS[m[1]!]) return m[1]!;
+  return roomId;
 }
 
 /** Map positions for the phone's Brooklyn map (rough geography, not to scale). */

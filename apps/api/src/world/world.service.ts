@@ -13,6 +13,7 @@ import {
   BASEMENT_STARTER,
   STREET_ID,
   TIER_BY_ID,
+  baseRoomId,
   buildRoomLayout,
   homeRoom,
   homeRoomDef,
@@ -48,11 +49,12 @@ export class WorldService {
     @InjectRepository(Home) private homes: Repository<Home>,
   ) {}
 
-  /** Any room by id; homes come from their saved layout. */
+  /** Any room by id; homes come from their saved layout. Instanced rooms resolve to base definition. */
   async roomFor(roomId: string): Promise<RoomDef | null> {
-    if (!isHomeRoom(roomId)) return roomDef(roomId);
-    const home = await this.homes.findOneBy({ id: roomId.slice("home:".length) });
-    return home ? homeRoomDef(roomId, homeInfo(home)) : roomDef(roomId);
+    const base = baseRoomId(roomId);
+    if (!isHomeRoom(base)) return roomDef(base);
+    const home = await this.homes.findOneBy({ id: base.slice("home:".length) });
+    return home ? homeRoomDef(base, homeInfo(home)) : roomDef(base);
   }
 
   async homeById(id: string): Promise<Home | null> {
@@ -236,15 +238,42 @@ export class WorldService {
       .execute();
   }
 
+  /**
+   * Find the best instance of a venue room. If the base room is under capacity, returns it as-is.
+   * Otherwise tries `:1` through `:9` and picks the first under capacity, or the least-full.
+   */
+  private async instancedRoomId(baseId: string, capacity: number): Promise<string> {
+    const baseCount = await this.presenceRepo.count({ where: { roomId: baseId } });
+    if (baseCount < capacity) return baseId;
+    let bestId = baseId;
+    let bestCount = baseCount;
+    for (let i = 1; i <= 9; i++) {
+      const instId = `${baseId}:${i}`;
+      const count = await this.presenceRepo.count({ where: { roomId: instId } });
+      if (count < capacity) return instId;
+      if (count < bestCount) {
+        bestId = instId;
+        bestCount = count;
+      }
+    }
+    return bestId;
+  }
+
   async moveToRoom(characterId: string, toRoomId: string, now: number, at?: { x: number; y: number }) {
     const to = await this.roomFor(toRoomId);
     if (!to) return;
+    // Instance venues when over capacity (streets and homes are excluded)
+    let finalRoomId = toRoomId;
+    if (to.kind === "venue") {
+      const base = baseRoomId(toRoomId);
+      finalRoomId = await this.instancedRoomId(base, to.capacity);
+    }
     const spawn = at ?? to.spawn;
     const p = await this.presenceOf(characterId);
     if (p) {
-      await this.presenceRepo.update(p.id, { roomId: toRoomId, path: [spawn], startedAt: now, updatedAt: now });
+      await this.presenceRepo.update(p.id, { roomId: finalRoomId, path: [spawn], startedAt: now, updatedAt: now });
     } else {
-      await this.presenceRepo.save({ characterId, roomId: toRoomId, path: [spawn], startedAt: now, updatedAt: now });
+      await this.presenceRepo.save({ characterId, roomId: finalRoomId, path: [spawn], startedAt: now, updatedAt: now });
     }
   }
 

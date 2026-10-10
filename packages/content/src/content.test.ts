@@ -12,6 +12,7 @@ import {
   SHOPS,
   STREETS,
   VENUES,
+  baseRoomId,
   buildRoomLayout,
   emptyLotLayout,
   goalTiles,
@@ -103,5 +104,46 @@ describe("gigs and items", () => {
     for (const g of GIGS) for (const s of g.stops) expect(ACTIONS[s.action]).toBeDefined();
     for (const s of BASEMENT_STARTER) expect(ITEM_BY_ID[s.itemId]).toBeDefined();
     for (const item of ITEMS) for (const a of item.actions) expect(ACTIONS[a], `${item.id}: ${a}`).toBeDefined();
+  });
+
+  it("new gigs have stop tags that exist on at least one street", () => {
+    const allTags = new Set<string>();
+    for (const s of STREETS) for (const p of s.props) for (const t of p.tags ?? []) allTags.add(t);
+    for (const g of GIGS) {
+      for (const stop of g.stops) {
+        const found = stop.tags.some((t) => allTags.has(t));
+        expect(found, `${g.id} stop "${stop.label}" needs tags [${stop.tags}] but none exist on streets`).toBe(true);
+      }
+    }
+  });
+
+  it("gig_vend and gig_flip actions exist", () => {
+    expect(ACTIONS["gig_vend"]).toBeDefined();
+    expect(ACTIONS["gig_flip"]).toBeDefined();
+  });
+});
+
+describe("baseRoomId", () => {
+  it("strips instance suffix from venue rooms", () => {
+    expect(baseRoomId("venue:warehouse:1")).toBe("venue:warehouse");
+    expect(baseRoomId("venue:warehouse:9")).toBe("venue:warehouse");
+  });
+
+  it("leaves base venue rooms unchanged", () => {
+    expect(baseRoomId("venue:warehouse")).toBe("venue:warehouse");
+    expect(baseRoomId("venue:cafe")).toBe("venue:cafe");
+  });
+
+  it("leaves streets unchanged", () => {
+    expect(baseRoomId("crown-heights")).toBe("crown-heights");
+    expect(baseRoomId("bushwick-block")).toBe("bushwick-block");
+  });
+
+  it("leaves home rooms unchanged", () => {
+    expect(baseRoomId("home:abc123")).toBe("home:abc123");
+  });
+
+  it("leaves shop rooms unchanged", () => {
+    expect(baseRoomId("shop:crown-heights:patty")).toBe("shop:crown-heights:patty");
   });
 });

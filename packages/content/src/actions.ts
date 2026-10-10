@@ -146,6 +146,8 @@ export const ACTIONS: Record<string, ActionDef> = {
   gig_pickup: { id: "gig_pickup", label: "Pick up", kind: "use", durationMs: 4 * SEC, needs: { energy: -3 }, pose: "stand", status: "Picking up 📦" },
   gig_dropoff: { id: "gig_dropoff", label: "Drop off", kind: "use", durationMs: 4 * SEC, needs: { energy: -3 }, pose: "stand", status: "Dropping off 📦" },
   gig_task: { id: "gig_task", label: "Do the task", kind: "use", durationMs: 15 * SEC, needs: { energy: -15, hygiene: -10 }, pose: "stand", status: "On a task 🔧" },
+  gig_vend: { id: "gig_vend", label: "Set up and sell", kind: "use", durationMs: 18 * SEC, needs: { energy: -8, social: 8 }, pose: "stand", status: "Selling 🛒" },
+  gig_flip: { id: "gig_flip", label: "Make the sale", kind: "use", durationMs: 10 * SEC, needs: { energy: -5 }, pose: "stand", status: "Making the sale 👟" },
 
   // Phone (no object)
   call_home: { id: "call_home", label: "Call home ($2)", kind: "use", durationMs: 10 * SEC, needs: { social: 40 }, cost: 2, pose: "stand",

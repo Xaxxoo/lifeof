@@ -7,11 +7,11 @@ export interface GigDef {
   name: string;
   emoji: string;
   /** Each stop picks a prop on the current block with one of these tags. */
-  stops: { tags: PropTag[]; action: "gig_pickup" | "gig_dropoff" | "gig_task"; label: string }[];
+  stops: { tags: PropTag[]; action: "gig_pickup" | "gig_dropoff" | "gig_task" | "gig_vend" | "gig_flip"; label: string }[];
   pay: [number, number];
   /** Base tip, doubled in real rain, cut when late. */
   tip: number;
-  requires?: { skill: "fitness" | "creativity"; level: number }[];
+  requires?: { skill: "fitness" | "creativity" | "hustle"; level: number }[];
   skillXp: { key: "hustle" | "fitness" | "creativity"; xp: number };
   minutes: number;
 }
@@ -58,6 +58,36 @@ export const GIGS: GigDef[] = [
     requires: [{ skill: "fitness", level: 2 }],
     skillXp: { key: "hustle", xp: 20 },
     minutes: 5,
+  },
+  {
+    id: "streetcart",
+    app: "StreetCart",
+    name: "Street vending",
+    emoji: "🛒",
+    stops: [
+      { tags: ["food", "business"], action: "gig_pickup", label: "Pick up inventory" },
+      { tags: ["vendor", "outdoor"], action: "gig_vend", label: "Set up and sell" },
+    ],
+    pay: [25, 55],
+    tip: 8,
+    requires: [{ skill: "hustle", level: 2 }],
+    skillXp: { key: "hustle", xp: 18 },
+    minutes: 4,
+  },
+  {
+    id: "soleflip",
+    app: "SoleFlip",
+    name: "Sneaker flip",
+    emoji: "👟",
+    stops: [
+      { tags: ["business"], action: "gig_pickup", label: "Cop the drop" },
+      { tags: ["business", "residential"], action: "gig_flip", label: "Sell to the buyer" },
+    ],
+    pay: [40, 120],
+    tip: 15,
+    requires: [{ skill: "hustle", level: 3 }],
+    skillXp: { key: "hustle", xp: 25 },
+    minutes: 4,
   },
 ];
 

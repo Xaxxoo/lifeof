@@ -1,22 +1,26 @@
 import { Entity, PrimaryGeneratedColumn, Column, Index, CreateDateColumn } from "typeorm";
 
-@Entity("messages")
-export class Message {
+@Entity("direct_messages")
+export class DirectMessage {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar" })
+  @Column({ type: "uuid" })
   @Index()
-  roomId!: string;
+  senderId!: string;
 
   @Column({ type: "uuid" })
-  characterId!: string;
+  @Index()
+  recipientId!: string;
 
-  @Column({ type: "varchar" })
-  name!: string;
+  @Column({ type: "varchar", length: 20 })
+  senderName!: string;
 
   @Column({ type: "text" })
   body!: string;
+
+  @Column({ type: "boolean", default: false })
+  read!: boolean;
 
   @Column({ type: "boolean", nullable: true })
   safe!: boolean | null;

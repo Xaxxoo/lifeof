@@ -43,6 +43,7 @@ import { BankService } from "../bank/bank.service";
 import { GigsService } from "../gigs/gigs.service";
 import { CityService } from "../city/city.service";
 import { EventsGateway } from "../events/events.gateway";
+import { QuestsService } from "../quests/quests.service";
 
 const HOUR = 3_600_000;
 const TRAIN_DELAY_MS = 2 * 60_000;
@@ -83,6 +84,7 @@ export class PlayService {
     private gigs: GigsService,
     private city: CityService,
     @Inject(forwardRef(() => EventsGateway)) private gateway: EventsGateway,
+    private quests: QuestsService,
   ) {}
 
   async start(token: string, target: string, actionId: string, dest?: string) {
@@ -408,6 +410,29 @@ export class PlayService {
       moodlets,
       activity: null,
     });
+
+    // Quest triggers
+    if (a.kind === "use" && a.actionId && progress >= 0.99) {
+      this.quests.checkTrigger(c.id, "complete_action", a.actionId).catch(() => {});
+    }
+    if (a.kind === "ride" && patch.roomId) {
+      this.quests.checkTrigger(c.id, "complete_ride").catch(() => {});
+      this.quests.checkTrigger(c.id, "arrive_room", patch.roomId).catch(() => {});
+    }
+    if (a.kind === "travel" && patch.roomId) {
+      this.quests.checkTrigger(c.id, "arrive_room", patch.roomId).catch(() => {});
+      if (patch.roomId.startsWith("home:")) {
+        this.quests.checkTrigger(c.id, "arrive_home").catch(() => {});
+      }
+    }
+    if (a.kind === "work" && a.actionId === "go_to_work") {
+      this.quests.checkTrigger(c.id, "start_shift").catch(() => {});
+    }
+    // Cash threshold check (for onboarding)
+    const updatedC = await this.characters.findOneBy({ id: c.id });
+    if (updatedC) {
+      this.quests.checkTrigger(c.id, "cash_threshold", Number(updatedC.cash)).catch(() => {});
+    }
 
     // Broadcast activity lifecycle events via WebSocket
     // c.roomId is where the player is NOW (could be "work"/"transit" after board()),

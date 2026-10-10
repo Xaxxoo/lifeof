@@ -7,9 +7,10 @@ import { Character } from "../entities/character.entity";
 import { PlacedObject } from "../entities/placed-object.entity";
 import { BankModule } from "../bank/bank.module";
 import { AuthModule } from "../auth/auth.module";
+import { QuestsModule } from "../quests/quests.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Character, PlacedObject]), BankModule, AuthModule, WorldModule],
+  imports: [TypeOrmModule.forFeature([Character, PlacedObject]), BankModule, AuthModule, WorldModule, QuestsModule],
   controllers: [CharactersController],
   providers: [CharactersService],
   exports: [CharactersService],

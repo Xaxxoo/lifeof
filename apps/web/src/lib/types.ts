@@ -147,6 +147,110 @@ export interface HomesMine {
   lots: { id: string; name: string; neighborhood: string; width: number; height: number; price: number; blurb: string }[];
 }
 
+export interface RelationshipDoc {
+  characterId: string;
+  name: string;
+  look: { skin: string; hair: string; hairColor: string; shirt: string; pants: string };
+  level: string;
+  romantic: string | null;
+  points: number;
+}
+
+export interface SocialInteractionResult {
+  success: boolean;
+  rpGain: number;
+  newLevel: string;
+  moodlet?: { id: string; label: string; value: number };
+}
+
+export interface BlockedPlayerDoc {
+  characterId: string;
+  name: string;
+  look: { skin: string; hair: string; hairColor: string; shirt: string; pants: string };
+}
+
+export interface DirectMessageDoc {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  senderName: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface DmThreadDoc {
+  partnerId: string;
+  partnerName: string;
+  lastMessage: string;
+  lastAt: string;
+  unread: number;
+}
+
+export interface CrewDoc {
+  id: string;
+  name: string;
+  leaderId: string;
+  weeklyGoal: { type: string; target: number; progress: number; period: string } | null;
+  members: CrewMemberDoc[];
+}
+
+export interface CrewMemberDoc {
+  characterId: string;
+  name: string;
+  look: { skin: string; hair: string; hairColor: string; shirt: string; pants: string };
+  role: string;
+}
+
+export interface ListingDoc {
+  id: string;
+  homeId: string;
+  landlordId: string;
+  landlordName?: string;
+  kind: string;
+  rentPerWeek: number;
+  description: string | null;
+  status: string;
+  applicantCount: number;
+  createdAt: number;
+}
+
+export interface ApplicationDoc {
+  id: string;
+  listingId: string;
+  applicantId: string;
+  applicantName?: string;
+  message: string | null;
+  status: string;
+  appliedAt: number;
+}
+
+export interface LeaseDoc {
+  id: string;
+  homeId: string;
+  tenantId: string;
+  landlordId: string;
+  rentPerWeek: number;
+  status: string;
+  startedAt: number;
+}
+
+export interface QuestProgressDoc {
+  questId: string;
+  step: number;
+  completed: boolean;
+  flags: Record<string, unknown>;
+}
+
+export interface StoryChapterDoc {
+  id: string;
+  title: string;
+  origin: string;
+  chapter: number;
+  scenes: { speaker: string; text: string }[];
+  reward: { cash?: number; moodlet?: { id: string; label: string; value: number; hours: number } };
+}
+
 export type BuildOp =
   | { op: "add"; seg: import("@nyl/content").WallSeg }
   | { op: "remove"; x: number; y: number; side: "n" | "w" }

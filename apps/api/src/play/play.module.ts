@@ -9,6 +9,7 @@ import { BankModule } from "../bank/bank.module";
 import { GigsModule } from "../gigs/gigs.module";
 import { CityModule } from "../city/city.module";
 import { EventsModule } from "../events/events.module";
+import { QuestsModule } from "../quests/quests.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { EventsModule } from "../events/events.module";
     forwardRef(() => GigsModule),
     CityModule,
     forwardRef(() => EventsModule),
+    QuestsModule,
   ],
   controllers: [PlayController],
   providers: [PlayService],

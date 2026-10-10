@@ -21,6 +21,7 @@ import { Character } from "../entities/character.entity";
 import { PlacedObject } from "../entities/placed-object.entity";
 import { BankService } from "../bank/bank.service";
 import { WorldService } from "../world/world.service";
+import { QuestsService } from "../quests/quests.service";
 
 function oneOf(list: readonly string[], value: string, what: string) {
   if (!list.includes(value)) throw new BadRequestException(`Unknown ${what}`);
@@ -33,6 +34,7 @@ export class CharactersService {
     @InjectRepository(PlacedObject) private objects: Repository<PlacedObject>,
     private bank: BankService,
     private world: WorldService,
+    private quests: QuestsService,
   ) {}
 
   async me(token: string) {
@@ -107,6 +109,9 @@ export class CharactersService {
     });
 
     await this.world.createStarterHome(saved);
+
+    // Initialize onboarding quest
+    await this.quests.initOnboarding(saved.id);
 
     return saved;
   }

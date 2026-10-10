@@ -19,6 +19,13 @@ import { TransitModule } from "./transit/transit.module";
 import { StellarModule } from "./stellar/stellar.module";
 import { EventsModule } from "./events/events.module";
 import { HomesModule } from "./homes/homes.module";
+import { SocialModule } from "./social/social.module";
+import { DmModule } from "./dm/dm.module";
+import { ModerationModule } from "./moderation/moderation.module";
+import { CrewsModule } from "./crews/crews.module";
+import { ListingsModule } from "./listings/listings.module";
+import { QuestsModule } from "./quests/quests.module";
+import { StoriesModule } from "./stories/stories.module";
 import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
 
 @Module({
@@ -45,6 +52,13 @@ import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
     StellarModule,
     EventsModule,
     HomesModule,
+    SocialModule,
+    DmModule,
+    ModerationModule,
+    CrewsModule,
+    ListingsModule,
+    QuestsModule,
+    StoriesModule,
   ],
   providers: [
     ScheduledTasksService,

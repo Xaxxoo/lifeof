@@ -5,3 +5,4 @@ export * from "./clock";
 export * from "./skills";
 export * from "./activity";
 export * from "./weather";
+export * from "./social";

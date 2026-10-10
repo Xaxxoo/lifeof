@@ -6,6 +6,8 @@ import { BankService } from "../bank/bank.service";
 import { WorkService } from "../work/work.service";
 import { StellarDepositService } from "../stellar/stellar-deposit.service";
 import { PlayService } from "../play/play.service";
+import { CrewsService } from "../crews/crews.service";
+import { ListingsService } from "../listings/listings.service";
 
 @Injectable()
 export class ScheduledTasksService implements OnModuleInit {
@@ -18,6 +20,8 @@ export class ScheduledTasksService implements OnModuleInit {
     private work: WorkService,
     private stellarDeposits: StellarDepositService,
     private play: PlayService,
+    private crews: CrewsService,
+    private listingsService: ListingsService,
   ) {}
 
   async onModuleInit() {
@@ -53,7 +57,18 @@ export class ScheduledTasksService implements OnModuleInit {
 
   @Cron("0 * * * *")
   async everyHour() {
-    await Promise.allSettled([this.bank.collectRent(), this.city.heatCheck()]);
+    await Promise.allSettled([
+      this.bank.collectRent(),
+      this.city.heatCheck(),
+      this.crews.checkGoalCompletion(),
+      this.listingsService.collectLandlordRent(),
+    ]);
+  }
+
+  /** Housing lottery: Sun 8 PM — 3 random winners from pending applications. */
+  @Cron("0 20 * * 0")
+  async weeklyLottery() {
+    await this.listingsService.runLottery();
   }
 
   @Cron("*/10 * * * * *")

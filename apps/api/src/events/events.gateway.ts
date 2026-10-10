@@ -11,6 +11,8 @@ import { Server, Socket } from "socket.io";
 import { JwtService } from "@nestjs/jwt";
 import { WorldService } from "../world/world.service";
 import { ChatService } from "../chat/chat.service";
+import { SocialService } from "../social/social.service";
+import { DmService } from "../dm/dm.service";
 
 @WebSocketGateway({ cors: { origin: "*" } })
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -26,6 +28,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private jwt: JwtService,
     private world: WorldService,
     private chat: ChatService,
+    private social: SocialService,
+    private dm: DmService,
   ) {}
 
   async handleConnection(socket: Socket) {
@@ -172,7 +176,63 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage("social:interact")
+  async handleSocialInteract(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { targetId: string; interactionId: string },
+  ) {
+    const info = this.characterBySocket.get(socket.id);
+    if (!info) return;
+
+    try {
+      const result = await this.social.interact(info.token, data.targetId, data.interactionId);
+      socket.emit("social:result", { ...result, targetId: data.targetId });
+      // Notify the target player too
+      this.sendToCharacter(data.targetId, "social:incoming", {
+        fromCharacterId: info.characterId,
+        interactionId: data.interactionId,
+        success: result.success,
+      });
+    } catch (e) {
+      socket.emit("error", { message: e instanceof Error ? e.message : "Interaction failed" });
+    }
+  }
+
+  @SubscribeMessage("dm:send")
+  async handleDmSend(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { recipientId: string; body: string },
+  ) {
+    const info = this.characterBySocket.get(socket.id);
+    if (!info) return;
+
+    try {
+      const msg = await this.dm.send(info.token, data.recipientId, data.body);
+      if (msg.visible) {
+        socket.emit("dm:sent", msg);
+        this.sendToCharacter(data.recipientId, "dm:receive", {
+          id: msg.id,
+          senderId: msg.senderId,
+          senderName: msg.senderName,
+          body: msg.body,
+          createdAt: msg.createdAt,
+        });
+      }
+    } catch (e) {
+      socket.emit("error", { message: e instanceof Error ? e.message : "DM failed" });
+    }
+  }
+
   // --- Public methods for other services to call ---
+
+  sendToCharacter(characterId: string, event: string, payload: unknown) {
+    const sockets = this.socketsByCharacter.get(characterId);
+    if (!sockets) return;
+    for (const socketId of sockets) {
+      const socket = this.server.sockets.sockets.get(socketId);
+      if (socket) socket.emit(event, payload);
+    }
+  }
 
   broadcastToRoom(roomId: string, event: string, payload: unknown) {
     this.server.to(roomId).emit(event, payload);

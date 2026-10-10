@@ -105,4 +105,11 @@ export class Character {
   /** Paints and floors you've bought; they stay yours when you move. */
   @Column({ type: "jsonb", default: () => `'{"paints":["cream"],"floors":["oak"]}'` })
   unlocks!: { paints: string[]; floors: string[] };
+
+  @Column({ type: "bigint", default: () => "EXTRACT(EPOCH FROM now()) * 1000" })
+  createdAt!: number;
+
+  /** Origin story progress: maps origin → completed chapter number. */
+  @Column({ type: "jsonb", default: () => "'{}'" })
+  storyProgress!: Record<string, number>;
 }

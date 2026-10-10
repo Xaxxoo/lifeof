@@ -8,6 +8,8 @@ import {
   FOOD_CAREER,
   GIG_BY_ID,
   GIG_WINDOW_MS,
+  ITEM_CATEGORIES,
+  ITEMS,
   NEIGHBORHOOD_MAP,
   ORIGINS,
   ROOMS,
@@ -18,14 +20,16 @@ import {
   roomDef,
   route,
 } from "@nyl/content";
+import { weatherEffectText } from "@nyl/game-core";
 import { LineBullet, lineColor } from "./LineBullet";
 import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
-import type { CharacterDoc, CityStateDoc } from "@/lib/types";
+import type { CharacterDoc, CityStateDoc, RelationshipDoc, BlockedPlayerDoc, DmThreadDoc, DirectMessageDoc, CrewDoc, ListingDoc, ApplicationDoc, LeaseDoc, QuestProgressDoc, StoryChapterDoc } from "@/lib/types";
+import { SOCIAL_INTERACTIONS, SOCIAL_INTERACTION_LIST, RELATIONSHIP_LEVELS } from "@nyl/content";
 
-export type PhoneTab = "map" | "gigs" | "jobs" | "bank" | "wallet" | "me";
+export type PhoneTab = "map" | "gigs" | "jobs" | "bank" | "wallet" | "me" | "shop" | "today" | "settings" | "people" | "chats" | "homes";
 
 export function Phone({
   me,
@@ -34,13 +38,21 @@ export function Phone({
   onClose,
   onCallHome,
   onRide,
+  onGo,
+  onGoHome,
+  onGoToWork,
+  hereId,
 }: {
   me: CharacterDoc;
   city: CityStateDoc | null;
   initialTab?: PhoneTab;
   onClose: () => void;
   onCallHome: () => void;
-  onRide: (dest: string) => void;
+  onRide?: (dest: string) => void;
+  onGo?: (p: { roomId: string; target: string }) => void;
+  onGoHome?: () => void;
+  onGoToWork?: () => void;
+  hereId?: string | null;
 }) {
   const [tab, setTab] = useState<PhoneTab>(initialTab);
   const origin = ORIGINS.find((o) => o.id === me.origin);
@@ -54,24 +66,30 @@ export function Phone({
           Close
         </button>
       </div>
-      <div className="mt-2 flex gap-1 px-3">
-        {(["map", "gigs", "jobs", "bank", "wallet", "me"] as PhoneTab[]).map((t) => (
+      <div className="mt-2 flex flex-wrap gap-1 px-3">
+        {(["map", "people", "chats", "gigs", "jobs", "bank", "wallet", "me", "shop", "homes", "today", "settings"] as PhoneTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 rounded-full py-1.5 text-xs font-semibold capitalize ${tab === t ? "bg-white text-black" : "bg-white/10 text-white/70"}`}
+            className={`rounded-full px-2.5 py-1.5 text-xs font-semibold capitalize ${tab === t ? "bg-white text-black" : "bg-white/10 text-white/70"}`}
           >
             {t === "me" ? "Me" : t}
           </button>
         ))}
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {tab === "map" && <MapApp me={me} city={city} onRide={onRide} />}
+        {tab === "map" && <MapApp me={me} city={city} onRide={onRide ?? (() => {})} />}
+        {tab === "people" && <People me={me} />}
+        {tab === "chats" && <Chats me={me} />}
         {tab === "gigs" && <Gigs me={me} />}
         {tab === "jobs" && <Jobs me={me} />}
         {tab === "bank" && <Bank me={me} onSwitchTab={setTab} />}
         {tab === "wallet" && <Wallet me={me} onSwitchTab={setTab} />}
-        {tab === "me" && <Me me={me} />}
+        {tab === "me" && <MeTab me={me} />}
+        {tab === "shop" && <Shop me={me} />}
+        {tab === "homes" && <HomesTab me={me} />}
+        {tab === "today" && <Today me={me} city={city} />}
+        {tab === "settings" && <Settings me={me} />}
       </div>
       <div className="border-t border-white/10 p-3">
         <button onClick={onCallHome} className="w-full rounded-xl bg-emerald-500/90 py-2.5 text-sm font-semibold text-black">
@@ -220,10 +238,44 @@ function Bank({ me, onSwitchTab }: { me: CharacterDoc; onSwitchTab: (t: PhoneTab
   );
 }
 
-function Me({ me }: { me: CharacterDoc }) {
+function MeTab({ me }: { me: CharacterDoc }) {
   const origin = ORIGINS.find((o) => o.id === me.origin);
   const status = STATUSES.find((s) => s.id === me.status);
   const moodlets = activeMoodlets(me.moodlets, serverNow());
+  const chaptersFetcher = useCallback(() => api.availableChapters(), []);
+  const chapters = usePolling(chaptersFetcher, 15000) ?? [];
+  const toast = useGame((s) => s.toast);
+  const [readingChapter, setReadingChapter] = useState<StoryChapterDoc | null>(null);
+
+  if (readingChapter) {
+    return (
+      <div>
+        <button onClick={() => setReadingChapter(null)} className="text-xs text-white/50 mb-3">
+          &larr; Back
+        </button>
+        <p className="text-sm font-semibold">{readingChapter.title}</p>
+        <div className="mt-3 space-y-3">
+          {readingChapter.scenes.map((s, i) => (
+            <div key={i} className={`rounded-xl px-3 py-2 text-xs ${s.speaker === "You" ? "bg-sky-500/20 ml-4" : "bg-white/5 mr-4"}`}>
+              <p className="font-semibold text-white/60">{s.speaker}</p>
+              <p className="mt-0.5">{s.text}</p>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => {
+            api.completeChapter(readingChapter.id)
+              .then((r) => { toast("Chapter complete!", "good"); setReadingChapter(null); })
+              .catch((e) => toast(playerMessage(e), "error"));
+          }}
+          className="mt-4 w-full rounded-xl bg-[#f3a712] py-2 text-sm font-semibold text-black"
+        >
+          Complete Chapter
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       <p className="text-lg font-semibold">{me.name}</p>
@@ -253,6 +305,27 @@ function Me({ me }: { me: CharacterDoc }) {
               {m.value} {m.label}
             </p>
           ))}
+        </>
+      )}
+      {chapters.length > 0 && (
+        <>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-white/50">Your Story</p>
+          <div className="mt-2 space-y-2">
+            {chapters.map((ch) => (
+              <button
+                key={ch.id}
+                onClick={() => {
+                  api.startChapter(ch.id)
+                    .then((full) => setReadingChapter(full))
+                    .catch((e) => toast(playerMessage(e), "error"));
+                }}
+                className="w-full rounded-xl bg-white/5 px-3 py-2 text-left"
+              >
+                <p className="text-xs font-semibold">Ch. {ch.chapter}: {ch.title}</p>
+                {ch.reward.cash && <p className="text-[11px] text-emerald-300">Reward: ${ch.reward.cash}</p>}
+              </button>
+            ))}
+          </div>
         </>
       )}
     </div>
@@ -563,6 +636,440 @@ function Wallet({ me, onSwitchTab }: { me: CharacterDoc; onSwitchTab: (t: PhoneT
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Satirical one-liners for the most common Brooklyn 311 complaint types. */
+const COMPLAINT_COPY: Record<string, string> = {
+  "Noise - Residential": "Your neighbor discovered subwoofers",
+  "Noise - Street/Sidewalk": "Someone is having a block party without you",
+  "Illegal Parking": "Alternate-side parking claims more victims",
+  "HEAT/HOT WATER": "A landlord somewhere says the heat is 'on'",
+  Rodent: "A rat is living better than you",
+  "Blocked Driveway": "A Honda Civic has blocked a driveway, again",
+  "Noise - Vehicle": "A car alarm is singing to the block",
+  "UNSANITARY CONDITION": "Your building is 'pre-war' in every sense",
+};
+
+function Shop({ me }: { me: CharacterDoc }) {
+  const [category, setCategory] = useState(ITEM_CATEGORIES[0]!.id);
+  const items = ITEMS.filter((it) => it.category === category);
+  return (
+    <div>
+      <p className="text-xs text-white/50">Browse the catalog. Go home and use Build mode to buy and place.</p>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {ITEM_CATEGORIES.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => setCategory(c.id)}
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${category === c.id ? "bg-white text-black" : "bg-white/10 text-white/70"}`}
+          >
+            {c.icon} {c.id}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {items.map((it) => (
+          <div key={it.id} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold">{it.name}</p>
+              <p className="text-[11px] text-white/50">{"★".repeat(it.stars)}{"☆".repeat(4 - it.stars)}</p>
+            </div>
+            <p className="text-xs font-semibold tabular-nums">${it.price}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Today({ me, city }: { me: CharacterDoc; city: CityStateDoc | null }) {
+  if (!city) return <p className="text-xs text-white/50">City data loading...</p>;
+
+  const here = roomDef(me.roomId);
+  const neighborhoodId = here?.kind === "street" || here?.kind === "park" ? here.id : here?.exitTo ? here.exitTo.roomId : null;
+  const neighborhoodRoom = neighborhoodId ? ROOMS[neighborhoodId] : undefined;
+  const effect = weatherEffectText(city.weather);
+  const local = city.blockEvents.items.filter((i) => i.neighborhood === neighborhoodId);
+  const borough = city.blockEvents.items.filter((i) => !i.neighborhood);
+
+  return (
+    <div>
+      <p className="text-sm font-semibold">Today in Brooklyn</p>
+      <p className="mt-1 text-[11px] text-white/50">What happens in the real city happens here.</p>
+
+      <div className="mt-4">
+        <div className="mb-1.5 flex items-center gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Subway</p>
+          <span className={`rounded px-1 text-[9px] font-bold uppercase ${city.subway.source === "live" ? "bg-red-500/80" : "bg-white/15 text-white/60"}`}>
+            {city.subway.source}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {city.subway.lines.map((l) => (
+            <span
+              key={l.line}
+              title={l.text}
+              className={`grid size-7 place-items-center rounded-full text-xs font-bold ${
+                l.status === "good"
+                  ? "bg-white/10 text-white/80"
+                  : l.status === "suspended"
+                    ? "bg-red-600 text-white"
+                    : l.status === "delays"
+                      ? "bg-amber-400 text-black"
+                      : "bg-sky-500 text-white"
+              }`}
+            >
+              {l.line}
+            </span>
+          ))}
+        </div>
+        {city.subway.lines
+          .filter((l) => l.status !== "good" && l.text)
+          .slice(0, 3)
+          .map((l) => (
+            <p key={l.line} className="mt-2 text-xs text-white/75">
+              {l.text}
+            </p>
+          ))}
+      </div>
+
+      <div className="mt-4">
+        <div className="mb-1.5 flex items-center gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Weather</p>
+          <span className={`rounded px-1 text-[9px] font-bold uppercase ${city.weather.source === "live" ? "bg-red-500/80" : "bg-white/15 text-white/60"}`}>
+            {city.weather.source}
+          </span>
+        </div>
+        <p className="text-xs text-white/80">
+          {Math.round(city.weather.tempF)}&deg;F, {city.weather.summary.toLowerCase()}, {city.weather.precipChance}% chance of rain.
+        </p>
+        {effect && <p className="mt-1 text-xs text-sky-300">{effect}</p>}
+        {city.weather.alerts.map((a) => (
+          <p key={a} className="mt-1 text-xs font-semibold text-amber-300">
+            {a}
+          </p>
+        ))}
+      </div>
+
+      <div className="mt-4">
+        <div className="mb-1.5 flex items-center gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
+            {neighborhoodRoom ? `311 in ${neighborhoodRoom.neighborhood}` : "311 in Brooklyn"}
+          </p>
+          <span className={`rounded px-1 text-[9px] font-bold uppercase ${city.blockEvents.source === "live" ? "bg-red-500/80" : "bg-white/15 text-white/60"}`}>
+            {city.blockEvents.source}
+          </span>
+        </div>
+        {(local.length ? local : borough).slice(0, 4).map((e) => (
+          <p key={e.type} className="text-xs text-white/80">
+            {COMPLAINT_COPY[e.type] ?? e.type} <span className="text-white/45">&middot; {e.count} reports</span>
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Settings({ me }: { me: CharacterDoc }) {
+  const origin = ORIGINS.find((o) => o.id === me.origin);
+  const status = STATUSES.find((s) => s.id === me.status);
+  return (
+    <div>
+      <div className="rounded-2xl bg-white/5 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-white/50">Account</p>
+        <p className="mt-2 text-sm font-semibold">{me.name}</p>
+        <p className="text-xs text-white/60">From {origin?.name ?? me.origin}</p>
+        <p className="text-xs text-white/60">{status?.name ?? me.status}</p>
+      </div>
+      <div className="mt-3 rounded-2xl bg-white/5 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-white/50">About</p>
+        <p className="mt-2 text-xs text-white/70">New York Life &mdash; Brooklyn Beta</p>
+      </div>
+      <button
+        onClick={() => {
+          localStorage.removeItem("nyl_token");
+          window.location.reload();
+        }}
+        className="mt-4 w-full rounded-xl bg-red-500/80 py-2.5 text-sm font-semibold text-white"
+      >
+        Log out
+      </button>
+    </div>
+  );
+}
+
+function People({ me }: { me: CharacterDoc }) {
+  const [view, setView] = useState<"friends" | "blocked" | "crew">("friends");
+  const friendsFetcher = useCallback(() => api.friends(), []);
+  const friendsList = usePolling(friendsFetcher, 10000) ?? [];
+  const blockedFetcher = useCallback(() => api.blockedList(), []);
+  const blockedList = usePolling(blockedFetcher, 15000) ?? [];
+  const crewFetcher = useCallback(() => api.myCrew(), []);
+  const crew = usePolling(crewFetcher, 10000);
+  const toast = useGame((s) => s.toast);
+
+  return (
+    <div>
+      <div className="flex gap-1 mb-3">
+        {(["friends", "crew", "blocked"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${view === v ? "bg-white text-black" : "bg-white/10 text-white/70"}`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+
+      {view === "friends" && (
+        <div>
+          {friendsList.length === 0 && <p className="text-xs text-white/50">No friends yet. Interact with people you meet to build relationships.</p>}
+          <div className="space-y-2">
+            {friendsList.map((f) => (
+              <div key={f.characterId} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2">
+                <div className="size-8 rounded-full" style={{ backgroundColor: f.look.skin }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold">{f.name}</p>
+                  <p className="text-[11px] text-white/50 capitalize">{f.level}{f.romantic ? ` · ${f.romantic}` : ""}</p>
+                </div>
+                <span className="text-[11px] text-white/40">{f.points} RP</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "crew" && (
+        <div>
+          {crew === undefined ? null : crew === null ? (
+            <div>
+              <p className="text-xs text-white/50">You&apos;re not in a crew. Create one or get invited by a friend.</p>
+              <button
+                onClick={() => {
+                  const name = prompt("Crew name (max 24 chars):");
+                  if (name) api.createCrew(name).then(() => toast("Crew created!", "good")).catch((e) => toast(playerMessage(e), "error"));
+                }}
+                className="mt-3 w-full rounded-xl bg-[#f3a712] py-2 text-sm font-semibold text-black"
+              >
+                Create a Crew
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="rounded-2xl bg-white/5 p-3">
+                <p className="text-sm font-semibold">{crew.name}</p>
+                <p className="text-xs text-white/50">{crew.members.length} members</p>
+                {crew.weeklyGoal && (
+                  <div className="mt-2">
+                    <p className="text-xs text-white/70">{crew.weeklyGoal.type}: {crew.weeklyGoal.progress}/{crew.weeklyGoal.target}</p>
+                    <div className="mt-1 h-1.5 rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, (crew.weeklyGoal.progress / crew.weeklyGoal.target) * 100)}%` }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 space-y-1.5">
+                {crew.members.map((m) => (
+                  <div key={m.characterId} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2">
+                    <div className="size-8 rounded-full" style={{ backgroundColor: m.look.skin }} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold">{m.name}</p>
+                      <p className="text-[11px] text-white/50 capitalize">{m.role}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => api.leaveCrew().catch((e) => toast(playerMessage(e), "error"))} className="mt-3 text-xs text-white/40 underline">
+                Leave crew
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {view === "blocked" && (
+        <div>
+          {blockedList.length === 0 && <p className="text-xs text-white/50">No blocked players.</p>}
+          <div className="space-y-2">
+            {blockedList.map((b) => (
+              <div key={b.characterId} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2">
+                <div className="size-8 rounded-full" style={{ backgroundColor: b.look.skin }} />
+                <p className="min-w-0 flex-1 text-xs font-semibold">{b.name}</p>
+                <button
+                  onClick={() => api.unblockPlayer(b.characterId).then(() => toast("Unblocked", "good")).catch((e) => toast(playerMessage(e), "error"))}
+                  className="rounded-full bg-white/10 px-2 py-1 text-[11px]"
+                >
+                  Unblock
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Chats({ me }: { me: CharacterDoc }) {
+  const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [msgInput, setMsgInput] = useState("");
+  const threadsFetcher = useCallback(() => api.dmThreads(), []);
+  const threads = usePolling(threadsFetcher, 5000) ?? [];
+  const convoFetcher = useCallback(() => partnerId ? api.dmConversation(partnerId) : Promise.resolve([]), [partnerId]);
+  const convo = usePolling(convoFetcher, 3000) ?? [];
+  const toast = useGame((s) => s.toast);
+
+  if (partnerId) {
+    return (
+      <div className="flex flex-col h-full">
+        <button onClick={() => setPartnerId(null)} className="text-xs text-white/50 mb-2">
+          &larr; Back to threads
+        </button>
+        <div className="flex-1 overflow-y-auto space-y-2 mb-3">
+          {convo.map((m) => (
+            <div key={m.id} className={`rounded-xl px-3 py-2 text-xs ${m.senderId === me.id ? "bg-sky-500/20 ml-6" : "bg-white/5 mr-6"}`}>
+              <p className="font-semibold text-white/60">{m.senderName}</p>
+              <p className="mt-0.5">{m.body}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Message…"
+            value={msgInput}
+            onChange={(e) => setMsgInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && msgInput.trim()) {
+                api.sendDm(partnerId, msgInput.trim()).then(() => setMsgInput("")).catch((e) => toast(playerMessage(e), "error"));
+              }
+            }}
+            className="min-w-0 flex-1 rounded-lg bg-black/40 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-white/30"
+          />
+          <button
+            disabled={!msgInput.trim()}
+            onClick={() => {
+              if (msgInput.trim()) api.sendDm(partnerId, msgInput.trim()).then(() => setMsgInput("")).catch((e) => toast(playerMessage(e), "error"));
+            }}
+            className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black disabled:opacity-50"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {threads.length === 0 && <p className="text-xs text-white/50">No messages yet. DM friends from the People tab.</p>}
+      <div className="space-y-1.5">
+        {threads.map((t) => (
+          <button
+            key={t.partnerId}
+            onClick={() => { setPartnerId(t.partnerId); api.markDmRead(t.partnerId); }}
+            className="flex w-full items-center gap-3 rounded-xl bg-white/5 px-3 py-2 text-left"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold">{t.partnerName}</p>
+                {t.unread > 0 && <span className="rounded-full bg-sky-500 px-1.5 text-[10px] font-bold">{t.unread}</span>}
+              </div>
+              <p className="truncate text-[11px] text-white/50">{t.lastMessage}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HomesTab({ me }: { me: CharacterDoc }) {
+  const [view, setView] = useState<"mine" | "browse" | "applications">("mine");
+  const listingsFetcher = useCallback(() => api.browseListings(), []);
+  const listings = usePolling(listingsFetcher, 15000) ?? [];
+  const appsFetcher = useCallback(() => api.myApplications(), []);
+  const apps = usePolling(appsFetcher, 15000) ?? [];
+  const leasesFetcher = useCallback(() => api.myLeases(), []);
+  const leases = usePolling(leasesFetcher, 15000) ?? [];
+  const toast = useGame((s) => s.toast);
+
+  return (
+    <div>
+      <div className="flex gap-1 mb-3">
+        {(["mine", "browse", "applications"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${view === v ? "bg-white text-black" : "bg-white/10 text-white/70"}`}
+          >
+            {v === "mine" ? "My Leases" : v === "browse" ? "Browse" : "Applications"}
+          </button>
+        ))}
+      </div>
+
+      {view === "mine" && (
+        <div>
+          {leases.length === 0 && <p className="text-xs text-white/50">No active leases.</p>}
+          <div className="space-y-2">
+            {leases.map((l) => (
+              <div key={l.id} className="rounded-2xl bg-white/5 p-3">
+                <p className="text-xs font-semibold">${l.rentPerWeek}/week</p>
+                <p className="text-[11px] text-white/50 capitalize">{l.status}</p>
+                {l.status === "active" && (
+                  <button
+                    onClick={() => api.terminateLease(l.id).then(() => toast("Lease terminated", "good")).catch((e) => toast(playerMessage(e), "error"))}
+                    className="mt-2 text-xs text-red-300 underline"
+                  >
+                    Terminate
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "browse" && (
+        <div>
+          {listings.length === 0 && <p className="text-xs text-white/50">No listings available.</p>}
+          <div className="space-y-2">
+            {listings.map((l) => (
+              <div key={l.id} className="rounded-2xl bg-white/5 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold capitalize">{l.kind}</p>
+                  <p className="text-xs font-semibold">${l.rentPerWeek}/wk</p>
+                </div>
+                {l.description && <p className="mt-1 text-[11px] text-white/50">{l.description}</p>}
+                <p className="mt-1 text-[11px] text-white/40">{l.applicantCount} applicants</p>
+                <button
+                  onClick={() => api.applyToListing(l.id).then(() => toast("Applied!", "good")).catch((e) => toast(playerMessage(e), "error"))}
+                  className="mt-2 w-full rounded-xl bg-[#f3a712] py-1.5 text-xs font-semibold text-black"
+                >
+                  Apply
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "applications" && (
+        <div>
+          {apps.length === 0 && <p className="text-xs text-white/50">No applications.</p>}
+          <div className="space-y-2">
+            {apps.map((a) => (
+              <div key={a.id} className="rounded-2xl bg-white/5 p-3">
+                <p className="text-xs font-semibold capitalize">{a.status}</p>
+                {a.message && <p className="mt-1 text-[11px] text-white/50">{a.message}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -616,7 +616,7 @@ export function World({ roomId }: { roomId: string }) {
         }}
         onOpenPhone={() => {
           setMenuKey(null);
-          setPhoneTab((p) => (p ? null : "home"));
+          setPhoneTab((p) => (p ? null : "homes"));
         }}
         onOpenMap={() => {
           setMenuKey(null);

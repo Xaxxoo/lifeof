@@ -154,6 +154,15 @@ export class ListingsService {
       endedAt: null,
     });
 
+    // For roommate listings, move the tenant into the landlord's home
+    if (listing.kind === "roommate") {
+      await this.characters.update(app.applicantId, {
+        homeId: listing.homeId,
+        roomId: `home:${listing.homeId}`,
+        rent: { perWeek: 0, lastPeriod: "", owed: 0, missedWeeks: 0 },
+      });
+    }
+
     // Update application and listing
     await this.applications.update(app.id, { status: "accepted" });
     await this.listings.update(listing.id, {
@@ -210,6 +219,21 @@ export class ListingsService {
       status: "terminated",
       endedAt: Date.now(),
     });
+
+    // If the tenant was living in the landlord's home (roommate), check and reset
+    const tenant = await this.characters.findOneBy({ id: lease.tenantId });
+    if (tenant && tenant.homeId === lease.homeId) {
+      // Find or create a fallback home for the tenant
+      const ownHome = await this.homes.findOne({
+        where: { ownerId: lease.tenantId },
+      });
+      if (ownHome) {
+        await this.characters.update(lease.tenantId, {
+          homeId: ownHome.id,
+          roomId: `home:${ownHome.id}`,
+        });
+      }
+    }
   }
 
   async myLeases(characterId: string) {

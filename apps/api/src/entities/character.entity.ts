@@ -8,6 +8,9 @@ export class Character {
   @Column({ type: "varchar", unique: true })
   token!: string;
 
+  @Column({ type: "uuid", nullable: true })
+  userId!: string | null;
+
   @Column({ type: "varchar", length: 20 })
   name!: string;
 

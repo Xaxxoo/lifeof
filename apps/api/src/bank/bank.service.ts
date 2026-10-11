@@ -4,6 +4,7 @@ import { Repository } from "typeorm";
 import { rentPeriodKey, upsertMoodlet } from "@nyl/game-core";
 import { Character } from "../entities/character.entity";
 import { LedgerEntry } from "../entities/ledger-entry.entity";
+import { Lease } from "../entities/lease.entity";
 
 const LATE_FEE = 25;
 
@@ -12,6 +13,7 @@ export class BankService {
   constructor(
     @InjectRepository(Character) private characters: Repository<Character>,
     @InjectRepository(LedgerEntry) private ledger: Repository<LedgerEntry>,
+    @InjectRepository(Lease) private leases: Repository<Lease>,
   ) {}
 
   /**
@@ -65,9 +67,13 @@ export class BankService {
   async collectRent() {
     const now = Date.now();
     const period = rentPeriodKey(now);
+    // Characters with active player-landlord leases pay via collectLandlordRent() instead
+    const activeLeases = await this.leases.find({ where: { status: "active" } });
+    const leaseTenantIds = new Set(activeLeases.map((l) => l.tenantId));
     const all = await this.characters.find({ take: 5000 });
     for (const c of all) {
       if (c.rent.lastPeriod === period) continue;
+      if (leaseTenantIds.has(c.id)) continue;
       const due = c.rent.perWeek;
       if (Number(c.cash) >= due) {
         await this.addMoney(c.id, -due, "rent:weekly", `rent:${c.id}:${period}`, {

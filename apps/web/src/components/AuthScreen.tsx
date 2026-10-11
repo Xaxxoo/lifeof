@@ -276,6 +276,9 @@ function Plane() {
         />
       </mesh>
 
+      {/* Cabin windows — two rows along the fuselage */}
+      <CabinWindows />
+
       {/* Left wing */}
       <mesh position={[0.5, -0.1, 5]}>
         <boxGeometry args={[3, 0.15, 10]} />
@@ -339,6 +342,56 @@ function Plane() {
       </mesh>
     </group>
   );
+}
+
+/* ─── Cabin windows (instanced along both sides of the fuselage) ─── */
+
+const WINDOW_BOX = new BoxGeometry(0.28, 0.22, 0.06);
+const WINDOW_COUNT = 18; // per side
+
+function CabinWindows() {
+  const ref = useRef<InstancedMesh>(null);
+  const material = useMemo(
+    () => new MeshBasicMaterial({ color: new Color("#ffe9a0").multiplyScalar(2.5), toneMapped: false }),
+    [],
+  );
+  const total = WINDOW_COUNT * 2;
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    let idx = 0;
+    // Fuselage cylinder is rotated Z=PI/2, so it runs along X from -6 to +6.
+    // radiusTop 0.8 (at +X front) tapering to radiusBottom 0.7 (at -X tail).
+    // Keep windows away from cockpit (x~5.8) and tail (x~-5.5).
+    const startX = -4.2;
+    const endX = 4.8;
+    const spacing = (endX - startX) / (WINDOW_COUNT - 1);
+    // Angle from +Y axis in the Y-Z cross-section — ~80° puts windows
+    // slightly above the midline, like real cabin windows.
+    const theta = 1.35;
+    for (let side = 0; side < 2; side++) {
+      const sign = side === 0 ? 1 : -1;
+      const angle = sign * theta;
+      for (let i = 0; i < WINDOW_COUNT; i++) {
+        const x = startX + i * spacing;
+        // Interpolate radius along the taper (x=+6 nose → 0.7, x=-6 tail → 0.8)
+        const frac = (x + 6) / 12;
+        const r = 0.8 - frac * 0.1;
+        // Push slightly proud of the surface so the box isn't buried
+        const rOuter = r + 0.04;
+        dummy.position.set(x, Math.cos(angle) * rOuter, Math.sin(angle) * rOuter);
+        // Rotate so the box face (X-Y plane, normal along Z) aligns with
+        // the cylinder's outward surface normal at this angle.
+        dummy.rotation.set(angle - Math.PI / 2, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(idx++, dummy.matrix);
+      }
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, []);
+  return <instancedMesh ref={ref} args={[WINDOW_BOX, material, total]} />;
 }
 
 /* ─── Runway ─── */

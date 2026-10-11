@@ -92,7 +92,7 @@ export function AuthScreen({
           <ambientLight color="#2a3050" intensity={0.3} />
           <directionalLight
             position={[20, 40, 10]}
-            intensity={0.5}
+            intensity={0.8}
             color="#b8c4e8"
           />
           <Plane />
@@ -234,10 +234,10 @@ function Plane() {
     if (!group.current) return;
     const t = (clock.elapsedTime % CYCLE) / CYCLE;
 
-    // Glide path: upper-left far → lower-right near
-    const x = -40 + t * 55;      // -40 → 15
-    const y = 35 - t * 30;       // 35 → 5
-    const z = -80 + t * 75;      // -80 → -5
+    // Glide path: closer to camera so the plane reads large
+    const x = -30 + t * 45;      // -30 → 15
+    const y = 30 - t * 24;       // 30 → 6
+    const z = -50 + t * 55;      // -50 → 5
 
     group.current.position.set(x, y, z);
     group.current.rotation.set(
@@ -248,21 +248,21 @@ function Plane() {
 
     // Fade out near end, fade in at start for smooth loop
     const fade = t < 0.05 ? t / 0.05 : t > 0.9 ? (1 - t) / 0.1 : 1;
-    group.current.scale.setScalar(fade);
+    group.current.scale.setScalar(fade * 2.5);
   });
 
   return (
     <group ref={group}>
       {/* Fuselage */}
       <mesh rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.8, 0.7, 12, 12]} />
-        <meshStandardMaterial color="#e8e8e8" roughness={0.4} metalness={0.2} />
+        <cylinderGeometry args={[0.8, 0.7, 12, 16]} />
+        <meshStandardMaterial color="#f0f0f0" roughness={0.35} metalness={0.25} />
       </mesh>
 
       {/* Nose cone */}
       <mesh position={[0, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0, 0.7, 2, 12]} />
-        <meshStandardMaterial color="#d8d8d8" roughness={0.3} metalness={0.3} />
+        <cylinderGeometry args={[0, 0.7, 2, 16]} />
+        <meshStandardMaterial color="#e4e4e4" roughness={0.3} metalness={0.3} />
       </mesh>
 
       {/* Cockpit windows */}
@@ -271,7 +271,7 @@ function Plane() {
         <meshStandardMaterial
           color="#4fc3f7"
           emissive="#4fc3f7"
-          emissiveIntensity={0.8}
+          emissiveIntensity={1.5}
           toneMapped={false}
         />
       </mesh>
@@ -279,57 +279,63 @@ function Plane() {
       {/* Left wing */}
       <mesh position={[0.5, -0.1, 5]}>
         <boxGeometry args={[3, 0.15, 10]} />
-        <meshStandardMaterial color="#d0d0d0" roughness={0.4} metalness={0.15} />
+        <meshStandardMaterial color="#e0e0e0" roughness={0.35} metalness={0.2} />
       </mesh>
       {/* Right wing */}
       <mesh position={[0.5, -0.1, -5]}>
         <boxGeometry args={[3, 0.15, 10]} />
-        <meshStandardMaterial color="#d0d0d0" roughness={0.4} metalness={0.15} />
+        <meshStandardMaterial color="#e0e0e0" roughness={0.35} metalness={0.2} />
       </mesh>
 
       {/* Left engine nacelle */}
       <mesh position={[-0.3, -0.5, 4]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.4, 0.45, 1.8, 10]} />
-        <meshStandardMaterial color="#b0b0b0" roughness={0.3} metalness={0.4} />
+        <meshStandardMaterial color="#c8c8c8" roughness={0.3} metalness={0.4} />
       </mesh>
       {/* Right engine nacelle */}
       <mesh position={[-0.3, -0.5, -4]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.4, 0.45, 1.8, 10]} />
-        <meshStandardMaterial color="#b0b0b0" roughness={0.3} metalness={0.4} />
+        <meshStandardMaterial color="#c8c8c8" roughness={0.3} metalness={0.4} />
       </mesh>
 
       {/* Vertical stabilizer (tail) */}
       <mesh position={[-5.5, 1.5, 0]}>
         <boxGeometry args={[2, 3, 0.15]} />
-        <meshStandardMaterial color="#d0d0d0" roughness={0.4} metalness={0.15} />
+        <meshStandardMaterial color="#e0e0e0" roughness={0.35} metalness={0.2} />
       </mesh>
       {/* Horizontal stabilizer */}
       <mesh position={[-5.5, 0.6, 0]}>
         <boxGeometry args={[1.5, 0.12, 5]} />
-        <meshStandardMaterial color="#d0d0d0" roughness={0.4} metalness={0.15} />
+        <meshStandardMaterial color="#e0e0e0" roughness={0.35} metalness={0.2} />
       </mesh>
 
       {/* Landing lights — under nose, bloom-visible */}
-      <pointLight position={[5, -0.8, 0.3]} color="#fff8e0" intensity={8} distance={30} />
-      <pointLight position={[5, -0.8, -0.3]} color="#fff8e0" intensity={8} distance={30} />
+      <pointLight position={[5, -0.8, 0.3]} color="#fff8e0" intensity={20} distance={60} />
+      <pointLight position={[5, -0.8, -0.3]} color="#fff8e0" intensity={20} distance={60} />
       <mesh position={[5, -0.8, 0.3]}>
-        <sphereGeometry args={[0.12, 8, 8]} />
-        <meshBasicMaterial color={new Color("#fff8e0").multiplyScalar(4)} toneMapped={false} />
+        <sphereGeometry args={[0.18, 8, 8]} />
+        <meshBasicMaterial color={new Color("#fff8e0").multiplyScalar(6)} toneMapped={false} />
       </mesh>
       <mesh position={[5, -0.8, -0.3]}>
-        <sphereGeometry args={[0.12, 8, 8]} />
-        <meshBasicMaterial color={new Color("#fff8e0").multiplyScalar(4)} toneMapped={false} />
+        <sphereGeometry args={[0.18, 8, 8]} />
+        <meshBasicMaterial color={new Color("#fff8e0").multiplyScalar(6)} toneMapped={false} />
       </mesh>
 
       {/* Nav light — port (left, red) */}
       <mesh position={[0.5, 0, 9.8]}>
-        <sphereGeometry args={[0.1, 8, 8]} />
-        <meshBasicMaterial color={new Color("#ff0000").multiplyScalar(3)} toneMapped={false} />
+        <sphereGeometry args={[0.15, 8, 8]} />
+        <meshBasicMaterial color={new Color("#ff0000").multiplyScalar(5)} toneMapped={false} />
       </mesh>
       {/* Nav light — starboard (right, green) */}
       <mesh position={[0.5, 0, -9.8]}>
-        <sphereGeometry args={[0.1, 8, 8]} />
-        <meshBasicMaterial color={new Color("#00ff00").multiplyScalar(3)} toneMapped={false} />
+        <sphereGeometry args={[0.15, 8, 8]} />
+        <meshBasicMaterial color={new Color("#00ff00").multiplyScalar(5)} toneMapped={false} />
+      </mesh>
+
+      {/* Belly light — white strobe */}
+      <mesh position={[0, -0.85, 0]}>
+        <sphereGeometry args={[0.12, 8, 8]} />
+        <meshBasicMaterial color={new Color("#ffffff").multiplyScalar(4)} toneMapped={false} />
       </mesh>
     </group>
   );

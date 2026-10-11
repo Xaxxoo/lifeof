@@ -1,10 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Bloom, EffectComposer, ToneMapping } from "@react-three/postprocessing";
+import { ToneMappingMode } from "postprocessing";
+import {
+  BoxGeometry,
+  Color,
+  Fog,
+  type Group,
+  type InstancedMesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  Object3D,
+  SphereGeometry,
+} from "three";
 import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 
 type Mode = "login" | "signup";
+
+/* ═══════════════════════════════════════════════
+   Auth Screen — 3D runway landing scene + form
+   ═══════════════════════════════════════════════ */
 
 export function AuthScreen({
   onAuth,
@@ -18,13 +36,6 @@ export function AuthScreen({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-
-  // Animation tick
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 50);
-    return () => clearInterval(id);
-  }, []);
 
   async function submit() {
     setBusy(true);
@@ -48,118 +59,62 @@ export function AuthScreen({
     onGuest();
   }
 
-  // Plane descends from top-left to center-right over a ~20s loop
-  const planeT = (now % 20000) / 20000;
-  const planeX = -10 + planeT * 70;  // -10% → 60%
-  const planeY = 8 + planeT * 35;    // 8% → 43%
-  const planeScale = 0.6 + planeT * 0.6;
+  // Plane landing audio
+  useEffect(() => {
+    let audio: HTMLAudioElement | null = null;
+    try {
+      audio = new Audio("/sounds/plane-landing.mp3");
+      audio.loop = true;
+      audio.volume = 0.3;
+      audio.play().catch(() => {
+        // Autoplay blocked — ignore
+      });
+    } catch {
+      // Audio not available
+    }
+    return () => {
+      if (audio) {
+        audio.pause();
+        audio.src = "";
+      }
+    };
+  }, []);
 
   return (
-    <main className="relative flex min-h-full flex-col overflow-hidden bg-gradient-to-b from-[#1a2744] via-[#141a2e] to-[#0d1117]">
-      {/* ─── Animated sky scene ─── */}
-      <div className="pointer-events-none absolute inset-0">
-        {/* Stars */}
-        {STARS.map((s, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full bg-white"
-            style={{
-              left: `${s.x}%`,
-              top: `${s.y}%`,
-              width: s.size,
-              height: s.size,
-              opacity: 0.12 + Math.sin(now / (1200 + i * 400)) * 0.08,
-            }}
-          />
-        ))}
-
-        {/* Cloud layers — parallax drift */}
-        {CLOUDS.map((c, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full bg-white/[0.04]"
-            style={{
-              top: `${c.y}%`,
-              width: c.w,
-              height: c.h,
-              transform: `translateX(${((now / c.speed) % (120 + c.w)) - c.w}px)`,
-            }}
-          />
-        ))}
-
-        {/* Plane */}
-        <div
-          className="absolute"
-          style={{
-            left: `${planeX}%`,
-            top: `${planeY}%`,
-            transform: `scale(${planeScale}) rotate(-8deg)`,
-            transition: "transform 50ms linear",
-          }}
+    <main className="relative flex min-h-full flex-col overflow-hidden bg-[#0d1117]">
+      {/* ─── 3D Background ─── */}
+      <div className="absolute inset-0">
+        <Canvas
+          dpr={[1, 1.5]}
+          camera={{ position: [8, 12, 35], fov: 50, near: 0.1, far: 500 }}
         >
-          {/* Fuselage */}
-          <div className="h-3 w-24 rounded-r-full bg-white/25" />
-          {/* Cockpit windows */}
-          <div className="absolute right-1 top-0.5 flex gap-[2px]">
-            <div className="h-1.5 w-1 rounded-sm bg-[#8ec8f0]/30" />
-            <div className="h-1.5 w-1 rounded-sm bg-[#8ec8f0]/30" />
-          </div>
-          {/* Wing */}
-          <div className="absolute -top-4 left-6 h-2.5 w-16 -skew-y-6 rounded-sm bg-white/15" />
-          {/* Wing underside highlight */}
-          <div className="absolute -top-1.5 left-8 h-0.5 w-10 bg-white/[0.06]" />
-          {/* Tail fin */}
-          <div className="absolute -top-5 left-0 h-6 w-3 -skew-x-12 rounded-t-sm bg-white/15" />
-          {/* Engine glow */}
-          <div className="absolute left-8 top-3 h-1 w-3 rounded-full bg-[#f3a712]/20 blur-[2px]" />
-          <div className="absolute left-14 top-3 h-1 w-3 rounded-full bg-[#f3a712]/20 blur-[2px]" />
-        </div>
-
-        {/* Landing lights — two beams from the plane */}
-        <div
-          className="absolute h-[1px] bg-gradient-to-r from-white/10 to-transparent"
-          style={{
-            left: `${planeX + 4}%`,
-            top: `${planeY + 2}%`,
-            width: 60,
-            transform: `rotate(12deg)`,
-            opacity: 0.3 + Math.sin(now / 800) * 0.15,
-          }}
-        />
-
-        {/* NYC skyline silhouette at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-[2px] px-2">
-          {SKYLINE.map((h, i) => (
-            <div
-              key={i}
-              className="flex-1 bg-white/[0.06]"
-              style={{ height: h }}
+          <SceneSetup />
+          <ambientLight color="#2a3050" intensity={0.3} />
+          <directionalLight
+            position={[20, 40, 10]}
+            intensity={0.5}
+            color="#b8c4e8"
+          />
+          <Plane />
+          <Runway />
+          <Skyline />
+          <Clouds />
+          <EffectComposer multisampling={4}>
+            <Bloom
+              mipmapBlur
+              luminanceThreshold={1}
+              luminanceSmoothing={0.3}
+              intensity={0.9}
+              radius={0.7}
             />
-          ))}
-        </div>
-
-        {/* Runway approach lights */}
-        <div className="absolute bottom-0 left-[40%] flex items-end gap-4">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="rounded-full"
-              style={{
-                width: 3,
-                height: 3,
-                backgroundColor: "#f3a712",
-                opacity: 0.15 + Math.sin(now / 500 + i * 0.8) * 0.1,
-                marginBottom: 2 + i * 3,
-              }}
-            />
-          ))}
-        </div>
+            <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+          </EffectComposer>
+        </Canvas>
       </div>
 
-      {/* ─── Content ─── */}
+      {/* ─── Form overlay ─── */}
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
-          {/* Title */}
           <p className="text-center text-xs uppercase tracking-widest text-white/40">
             JFK Terminal 4 &middot; Arrivals
           </p>
@@ -255,31 +210,380 @@ export function AuthScreen({
   );
 }
 
-/* ─── Scene data ─── */
+/* ─── Scene setup ─── */
 
-const STARS = [
-  { x: 8, y: 5, size: 1.5 },
-  { x: 22, y: 12, size: 1 },
-  { x: 35, y: 3, size: 2 },
-  { x: 48, y: 9, size: 1 },
-  { x: 62, y: 6, size: 1.5 },
-  { x: 75, y: 14, size: 1 },
-  { x: 88, y: 4, size: 2 },
-  { x: 14, y: 18, size: 1 },
-  { x: 55, y: 16, size: 1 },
-  { x: 92, y: 11, size: 1.5 },
-  { x: 40, y: 20, size: 1 },
-  { x: 70, y: 2, size: 1 },
-];
+function SceneSetup() {
+  const get = useThree((s) => s.get);
+  useLayoutEffect(() => {
+    const { scene, camera } = get();
+    scene.background = new Color("#0d1117");
+    scene.fog = new Fog("#0d1117", 80, 260);
+    camera.lookAt(0, 2, -20);
+  }, [get]);
+  return null;
+}
 
-const CLOUDS = [
-  { y: 15, w: 140, h: 6, speed: 25000 },
-  { y: 28, w: 200, h: 4, speed: 35000 },
-  { y: 40, w: 100, h: 5, speed: 18000 },
-  { y: 22, w: 170, h: 3, speed: 30000 },
-  { y: 50, w: 120, h: 4, speed: 22000 },
-];
+/* ─── 3D Plane ─── */
 
-const SKYLINE = [
-  30, 45, 25, 55, 35, 70, 28, 50, 42, 20, 60, 32, 75, 38, 48, 22, 58, 30, 40, 65, 28, 52, 36, 45,
-];
+const CYCLE = 15; // seconds per loop
+
+function Plane() {
+  const group = useRef<Group>(null);
+
+  useFrame(({ clock }) => {
+    if (!group.current) return;
+    const t = (clock.elapsedTime % CYCLE) / CYCLE;
+
+    // Glide path: upper-left far → lower-right near
+    const x = -40 + t * 55;      // -40 → 15
+    const y = 35 - t * 30;       // 35 → 5
+    const z = -80 + t * 75;      // -80 → -5
+
+    group.current.position.set(x, y, z);
+    group.current.rotation.set(
+      -0.12,                      // slight pitch down
+      0.35,                       // angled toward runway
+      -0.04,                      // gentle bank
+    );
+
+    // Fade out near end, fade in at start for smooth loop
+    const fade = t < 0.05 ? t / 0.05 : t > 0.9 ? (1 - t) / 0.1 : 1;
+    group.current.scale.setScalar(fade);
+  });
+
+  return (
+    <group ref={group}>
+      {/* Fuselage */}
+      <mesh rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.8, 0.7, 12, 12]} />
+        <meshStandardMaterial color="#e8e8e8" roughness={0.4} metalness={0.2} />
+      </mesh>
+
+      {/* Nose cone */}
+      <mesh position={[0, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0, 0.7, 2, 12]} />
+        <meshStandardMaterial color="#d8d8d8" roughness={0.3} metalness={0.3} />
+      </mesh>
+
+      {/* Cockpit windows */}
+      <mesh position={[5.8, 0.35, 0]}>
+        <boxGeometry args={[1.2, 0.3, 0.8]} />
+        <meshStandardMaterial
+          color="#4fc3f7"
+          emissive="#4fc3f7"
+          emissiveIntensity={0.8}
+          toneMapped={false}
+        />
+      </mesh>
+
+      {/* Left wing */}
+      <mesh position={[0.5, -0.1, 5]}>
+        <boxGeometry args={[3, 0.15, 10]} />
+        <meshStandardMaterial color="#d0d0d0" roughness={0.4} metalness={0.15} />
+      </mesh>
+      {/* Right wing */}
+      <mesh position={[0.5, -0.1, -5]}>
+        <boxGeometry args={[3, 0.15, 10]} />
+        <meshStandardMaterial color="#d0d0d0" roughness={0.4} metalness={0.15} />
+      </mesh>
+
+      {/* Left engine nacelle */}
+      <mesh position={[-0.3, -0.5, 4]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.4, 0.45, 1.8, 10]} />
+        <meshStandardMaterial color="#b0b0b0" roughness={0.3} metalness={0.4} />
+      </mesh>
+      {/* Right engine nacelle */}
+      <mesh position={[-0.3, -0.5, -4]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.4, 0.45, 1.8, 10]} />
+        <meshStandardMaterial color="#b0b0b0" roughness={0.3} metalness={0.4} />
+      </mesh>
+
+      {/* Vertical stabilizer (tail) */}
+      <mesh position={[-5.5, 1.5, 0]}>
+        <boxGeometry args={[2, 3, 0.15]} />
+        <meshStandardMaterial color="#d0d0d0" roughness={0.4} metalness={0.15} />
+      </mesh>
+      {/* Horizontal stabilizer */}
+      <mesh position={[-5.5, 0.6, 0]}>
+        <boxGeometry args={[1.5, 0.12, 5]} />
+        <meshStandardMaterial color="#d0d0d0" roughness={0.4} metalness={0.15} />
+      </mesh>
+
+      {/* Landing lights — under nose, bloom-visible */}
+      <pointLight position={[5, -0.8, 0.3]} color="#fff8e0" intensity={8} distance={30} />
+      <pointLight position={[5, -0.8, -0.3]} color="#fff8e0" intensity={8} distance={30} />
+      <mesh position={[5, -0.8, 0.3]}>
+        <sphereGeometry args={[0.12, 8, 8]} />
+        <meshBasicMaterial color={new Color("#fff8e0").multiplyScalar(4)} toneMapped={false} />
+      </mesh>
+      <mesh position={[5, -0.8, -0.3]}>
+        <sphereGeometry args={[0.12, 8, 8]} />
+        <meshBasicMaterial color={new Color("#fff8e0").multiplyScalar(4)} toneMapped={false} />
+      </mesh>
+
+      {/* Nav light — port (left, red) */}
+      <mesh position={[0.5, 0, 9.8]}>
+        <sphereGeometry args={[0.1, 8, 8]} />
+        <meshBasicMaterial color={new Color("#ff0000").multiplyScalar(3)} toneMapped={false} />
+      </mesh>
+      {/* Nav light — starboard (right, green) */}
+      <mesh position={[0.5, 0, -9.8]}>
+        <sphereGeometry args={[0.1, 8, 8]} />
+        <meshBasicMaterial color={new Color("#00ff00").multiplyScalar(3)} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+/* ─── Runway ─── */
+
+const RUNWAY_LEN = 120;
+const RUNWAY_W = 6;
+const DASH_BOX = new BoxGeometry(0.2, 0.02, 2);
+const EDGE_SPHERE = new SphereGeometry(0.1, 6, 4);
+const dummy = new Object3D();
+
+function Runway() {
+  return (
+    <group position={[0, 0, -40]}>
+      {/* Surface */}
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.01, 0]} receiveShadow>
+        <planeGeometry args={[RUNWAY_W, RUNWAY_LEN]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
+      </mesh>
+
+      {/* Center dashes */}
+      <CenterLine />
+
+      {/* Edge lights */}
+      <EdgeLights />
+
+      {/* Threshold lights (green, approach end) */}
+      <ThresholdLights />
+
+      {/* PAPI lights */}
+      <PapiLights />
+    </group>
+  );
+}
+
+function CenterLine() {
+  const ref = useRef<InstancedMesh>(null);
+  const count = Math.floor(RUNWAY_LEN / 4);
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    for (let i = 0; i < count; i++) {
+      dummy.position.set(0, 0.02, -RUNWAY_LEN / 2 + i * 4 + 2);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [count]);
+  return (
+    <instancedMesh ref={ref} args={[DASH_BOX, undefined, count]}>
+      <meshStandardMaterial color="#cccccc" />
+    </instancedMesh>
+  );
+}
+
+function EdgeLights() {
+  const ref = useRef<InstancedMesh>(null);
+  const material = useMemo(
+    () => new MeshBasicMaterial({ color: new Color("#ffffff").multiplyScalar(3), toneMapped: false }),
+    [],
+  );
+  const count = Math.floor(RUNWAY_LEN / 5) * 2;
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    let idx = 0;
+    const n = Math.floor(RUNWAY_LEN / 5);
+    for (let i = 0; i < n; i++) {
+      for (const side of [-1, 1]) {
+        dummy.position.set(side * (RUNWAY_W / 2 + 0.3), 0.1, -RUNWAY_LEN / 2 + i * 5 + 2.5);
+        dummy.scale.setScalar(1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(idx++, dummy.matrix);
+      }
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [count]);
+  return <instancedMesh ref={ref} args={[EDGE_SPHERE, material, count]} />;
+}
+
+function ThresholdLights() {
+  const ref = useRef<InstancedMesh>(null);
+  const material = useMemo(
+    () => new MeshBasicMaterial({ color: new Color("#00ff66").multiplyScalar(3), toneMapped: false }),
+    [],
+  );
+  const count = 8;
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    for (let i = 0; i < count; i++) {
+      const x = -RUNWAY_W / 2 + (i / (count - 1)) * RUNWAY_W;
+      dummy.position.set(x, 0.1, RUNWAY_LEN / 2);
+      dummy.scale.setScalar(1.2);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, []);
+  return <instancedMesh ref={ref} args={[EDGE_SPHERE, material, count]} />;
+}
+
+function PapiLights() {
+  // 2 red + 2 white on each side of the runway
+  const lights = [
+    { x: RUNWAY_W / 2 + 1.5, z: RUNWAY_LEN / 2 - 8, color: "#ff2200" },
+    { x: RUNWAY_W / 2 + 2.3, z: RUNWAY_LEN / 2 - 8, color: "#ff2200" },
+    { x: RUNWAY_W / 2 + 3.1, z: RUNWAY_LEN / 2 - 8, color: "#ffffff" },
+    { x: RUNWAY_W / 2 + 3.9, z: RUNWAY_LEN / 2 - 8, color: "#ffffff" },
+  ];
+  return (
+    <group>
+      {lights.map((l, i) => (
+        <mesh key={i} position={[l.x, 0.15, l.z]}>
+          <boxGeometry args={[0.4, 0.25, 0.4]} />
+          <meshBasicMaterial
+            color={new Color(l.color).multiplyScalar(3)}
+            toneMapped={false}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/* ─── City skyline ─── */
+
+const BUILDING_BOX = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+
+function Skyline() {
+  const ref = useRef<InstancedMesh>(null);
+  const lots = useMemo(() => {
+    const rand = seeded(42);
+    const out: { x: number; z: number; w: number; d: number; h: number; color: string }[] = [];
+    const COLORS = ["#1a1f2e", "#222838", "#1e2430", "#252b3a", "#2a3040", "#181e28"];
+    // Buildings behind the runway
+    for (let i = 0; i < 120; i++) {
+      const x = -60 + rand() * 120;
+      const z = -140 + rand() * 80; // behind the runway
+      const h = 3 + rand() * rand() * 25;
+      const w = 1.5 + rand() * 3;
+      const d = 1.5 + rand() * 3;
+      out.push({ x, z, w, d, h, color: COLORS[Math.floor(rand() * COLORS.length)]! });
+    }
+    return out;
+  }, []);
+
+  const material = useMemo(() => {
+    return new MeshStandardMaterial({
+      roughness: 0.8,
+      emissive: new Color("#ffd080"),
+      emissiveIntensity: 0.15,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const c = new Color();
+    lots.forEach((l, i) => {
+      dummy.position.set(l.x, 0, l.z);
+      dummy.scale.set(l.w, l.h, l.d);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setColorAt(i, c.set(l.color));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [lots]);
+
+  return (
+    <instancedMesh ref={ref} args={[BUILDING_BOX, material, lots.length]} />
+  );
+}
+
+/* ─── Clouds ─── */
+
+function Clouds() {
+  const clusters = useMemo(() => {
+    const rand = seeded(99);
+    const out: { x: number; y: number; z: number; speed: number; parts: { dx: number; dy: number; dz: number; s: number }[] }[] = [];
+    for (let i = 0; i < 8; i++) {
+      const parts: { dx: number; dy: number; dz: number; s: number }[] = [];
+      for (let j = 0; j < 4 + Math.floor(rand() * 3); j++) {
+        parts.push({
+          dx: (rand() - 0.5) * 4,
+          dy: (rand() - 0.5) * 1.5,
+          dz: (rand() - 0.5) * 3,
+          s: 1.5 + rand() * 2,
+        });
+      }
+      out.push({
+        x: -80 + rand() * 160,
+        y: 20 + rand() * 25,
+        z: -100 + rand() * 60,
+        speed: 1.5 + rand() * 2,
+        parts,
+      });
+    }
+    return out;
+  }, []);
+
+  return (
+    <group>
+      {clusters.map((cl, i) => (
+        <CloudCluster key={i} cluster={cl} />
+      ))}
+    </group>
+  );
+}
+
+function CloudCluster({
+  cluster,
+}: {
+  cluster: {
+    x: number; y: number; z: number; speed: number;
+    parts: { dx: number; dy: number; dz: number; s: number }[];
+  };
+}) {
+  const ref = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const x = ((cluster.x + clock.elapsedTime * cluster.speed + 80) % 200) - 100;
+    ref.current.position.set(x, cluster.y, cluster.z);
+  });
+  return (
+    <group ref={ref}>
+      {cluster.parts.map((p, j) => (
+        <mesh key={j} position={[p.dx, p.dy, p.dz]} scale={[p.s, p.s * 0.5, p.s * 0.7]}>
+          <sphereGeometry args={[1, 8, 6]} />
+          <meshStandardMaterial color="#4a5568" transparent opacity={0.15} roughness={1} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/* ─── Helpers ─── */
+
+function seeded(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}

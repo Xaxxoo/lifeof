@@ -37,8 +37,11 @@ export class CharactersService {
     private quests: QuestsService,
   ) {}
 
-  async me(token: string) {
-    return this.characters.findOne({ where: { token } });
+  async me(token: string, userId?: string) {
+    const byToken = await this.characters.findOne({ where: { token } });
+    if (byToken) return byToken;
+    if (userId) return this.characters.findOne({ where: { userId } });
+    return null;
   }
 
   async getById(id: string) {
@@ -60,6 +63,7 @@ export class CharactersService {
     gender: string;
     sexuality: string;
     look: { skin: string; shirt: string; pants: string; hair: string; hairColor: string };
+    userId?: string;
   }) {
     const name = args.name.trim();
     if (name.length < 2 || name.length > 20) throw new BadRequestException("Name must be 2–20 characters");
@@ -91,6 +95,7 @@ export class CharactersService {
       gender: args.gender,
       sexuality: args.sexuality,
       look: args.look,
+      userId: args.userId ?? null,
       cash: 0,
       needs: startingNeeds(),
       needsUpdatedAt: now,

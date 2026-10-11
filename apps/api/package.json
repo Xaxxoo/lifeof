@@ -36,10 +36,12 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.4",
     "typeorm": "^0.3.20",
+    "bcryptjs": "^2.4.3",
     "uuid": "^11.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
+    "@types/bcryptjs": "^2.4.6",
     "@nestjs/schematics": "^11.0.0",
     "@swc/cli": "^0.8.1",
     "@swc/core": "^1.16.13",

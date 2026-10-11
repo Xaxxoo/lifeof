@@ -524,35 +524,73 @@ function PapiLights() {
 /* ─── City skyline ─── */
 
 const BUILDING_BOX = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const WIN_GEO = new BoxGeometry(0.3, 0.45, 0.06);
+
+interface WinData { x: number; y: number; z: number; lit: boolean }
 
 function Skyline() {
-  const ref = useRef<InstancedMesh>(null);
-  const lots = useMemo(() => {
+  const buildRef = useRef<InstancedMesh>(null);
+  const litRef = useRef<InstancedMesh>(null);
+  const darkRef = useRef<InstancedMesh>(null);
+
+  const { lots, litWins, darkWins } = useMemo(() => {
     const rand = seeded(42);
-    const out: { x: number; z: number; w: number; d: number; h: number; color: string }[] = [];
+    const lots: { x: number; z: number; w: number; d: number; h: number; color: string }[] = [];
     const COLORS = ["#1a1f2e", "#222838", "#1e2430", "#252b3a", "#2a3040", "#181e28"];
     // Buildings behind the runway
     for (let i = 0; i < 120; i++) {
       const x = -60 + rand() * 120;
-      const z = -140 + rand() * 80; // behind the runway
+      const z = -140 + rand() * 80;
       const h = 3 + rand() * rand() * 25;
       const w = 1.5 + rand() * 3;
       const d = 1.5 + rand() * 3;
-      out.push({ x, z, w, d, h, color: COLORS[Math.floor(rand() * COLORS.length)]! });
+      lots.push({ x, z, w, d, h, color: COLORS[Math.floor(rand() * COLORS.length)]! });
     }
-    return out;
+
+    // Generate windows on the +Z face of each building (visible to camera)
+    const litWins: WinData[] = [];
+    const darkWins: WinData[] = [];
+    const winRand = seeded(77);
+    const PAD = 0.35;       // inset from building edge
+    const SPACING_X = 0.8;  // horizontal spacing between window centers
+    const SPACING_Y = 1.1;  // vertical spacing between window centers
+    for (const lot of lots) {
+      const cols = Math.max(1, Math.floor((lot.w - PAD * 2) / SPACING_X));
+      const rows = Math.max(1, Math.floor((lot.h - 0.6) / SPACING_Y));
+      const gridW = (cols - 1) * SPACING_X;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const wx = lot.x - gridW / 2 + col * SPACING_X;
+          const wy = 1.0 + row * SPACING_Y;
+          const wz = lot.z + lot.d / 2 + 0.031; // just proud of +Z face
+          if (wy > lot.h - 0.3) continue;
+          const lit = winRand() < 0.45;
+          (lit ? litWins : darkWins).push({ x: wx, y: wy, z: wz, lit });
+        }
+      }
+    }
+    return { lots, litWins, darkWins };
   }, []);
 
-  const material = useMemo(() => {
+  const buildMat = useMemo(() => {
     return new MeshStandardMaterial({
       roughness: 0.8,
       emissive: new Color("#ffd080"),
-      emissiveIntensity: 0.15,
+      emissiveIntensity: 0.05,
     });
   }, []);
 
+  const litMat = useMemo(
+    () => new MeshBasicMaterial({ color: new Color("#ffe4a8").multiplyScalar(2), toneMapped: false }),
+    [],
+  );
+  const darkMat = useMemo(
+    () => new MeshStandardMaterial({ color: "#0a0e18", roughness: 0.9 }),
+    [],
+  );
+
   useLayoutEffect(() => {
-    const mesh = ref.current;
+    const mesh = buildRef.current;
     if (!mesh) return;
     const c = new Color();
     lots.forEach((l, i) => {
@@ -567,8 +605,28 @@ function Skyline() {
     mesh.computeBoundingSphere();
   }, [lots]);
 
+  useLayoutEffect(() => {
+    for (const [ref, wins] of [[litRef, litWins], [darkRef, darkWins]] as const) {
+      const mesh = ref.current;
+      if (!mesh) return;
+      wins.forEach((w, i) => {
+        dummy.position.set(w.x, w.y, w.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+    }
+  }, [litWins, darkWins]);
+
   return (
-    <instancedMesh ref={ref} args={[BUILDING_BOX, material, lots.length]} />
+    <group>
+      <instancedMesh ref={buildRef} args={[BUILDING_BOX, buildMat, lots.length]} />
+      <instancedMesh ref={litRef} args={[WIN_GEO, litMat, litWins.length]} />
+      <instancedMesh ref={darkRef} args={[WIN_GEO, darkMat, darkWins.length]} />
+    </group>
   );
 }
 

@@ -1,4 +1,4 @@
-import { BED_STUY, BUSHWICK, CROWN_HEIGHTS, FLATBUSH, type RoomDef } from "./rooms";
+import { BED_STUY, BUSHWICK, CROWN_HEIGHTS, DUMBO, FLATBUSH, WILLIAMSBURG, type RoomDef } from "./rooms";
 
 /**
  * Homes (PRD §6.5): rentals you move between, and empty lots you buy and build on from the ground up.
@@ -197,6 +197,69 @@ export const HOME_TIERS: HomeTier[] = [
       floors: { ...zone(1, 0, 6, 2, "kitchen-tile"), ...zone(10, 9, 14, 12, "bath-tile") },
       baseFloor: "walnut",
       paint: "white",
+    },
+  },
+  {
+    id: "loft",
+    name: "Warehouse loft",
+    neighborhood: "Williamsburg",
+    rentPerWeek: 2800,
+    moveIn: 5600,
+    blurb: "Exposed brick, fourteen-foot ceilings, freight elevator. The dream, basically.",
+    exitTo: { roomId: WILLIAMSBURG.id, at: { x: 5, y: 4 } },
+    layout: {
+      width: 16,
+      height: 12,
+      walls: [
+        ...perimeter(16, 12, [3, 7, 12], [5]),
+        ...vWall(10, 0, 5, [3]),
+        ...hWall(5, 10, 16),
+        ...vWall(12, 8, 12, [9]),
+        ...hWall(8, 12, 16),
+      ],
+      floors: {
+        ...zone(1, 0, 6, 3, "kitchen-tile"),
+        ...zone(12, 8, 16, 12, "bath-tile"),
+        ...zone(10, 0, 16, 5, "carpet"),
+      },
+      baseFloor: "walnut",
+      paint: "brick",
+    },
+  },
+  {
+    id: "penthouse",
+    name: "DUMBO penthouse",
+    neighborhood: "DUMBO",
+    rentPerWeek: 5500,
+    moveIn: 11000,
+    blurb: "Top floor. Manhattan Bridge view. Marble everything. You made it.",
+    exitTo: { roomId: DUMBO.id, at: { x: 14, y: 4 } },
+    layout: {
+      width: 18,
+      height: 14,
+      walls: [
+        ...perimeter(18, 14, [3, 6, 10, 14], [4, 8]),
+        // Master bedroom
+        ...vWall(11, 0, 6, [4]),
+        ...hWall(6, 11, 18),
+        // Second bedroom
+        ...vWall(11, 6, 10, [7]),
+        ...hWall(10, 11, 18),
+        // Master bath
+        ...vWall(14, 0, 6, [3]),
+        // Main bath
+        ...vWall(14, 10, 14, [11]),
+        ...hWall(10, 14, 18),
+      ],
+      floors: {
+        ...zone(1, 0, 7, 3, "kitchen-tile"),
+        ...zone(14, 0, 18, 6, "bath-tile"),
+        ...zone(14, 10, 18, 14, "bath-tile"),
+        ...zone(11, 0, 14, 6, "carpet"),
+        ...zone(11, 6, 14, 10, "carpet"),
+      },
+      baseFloor: "marble",
+      paint: "navy",
     },
   },
 ];

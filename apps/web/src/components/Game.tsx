@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, initSession } from "@/lib/api";
+import { api, initSession, guestSession, type SessionStatus } from "@/lib/api";
 import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
 import { SocketProvider, useSocket, useSocketEvent } from "@/lib/SocketContext";
 import { ArrivalIntro } from "./ArrivalIntro";
+import { AuthScreen } from "./AuthScreen";
 import { CreateCharacter } from "./CreateCharacter";
 import { Splash } from "./GameLoader";
 import { Toasts } from "./Toasts";
@@ -16,7 +17,7 @@ import { World } from "./World";
 const HEARTBEAT_MS = 15_000;
 
 export function Game() {
-  const [ready, setReady] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus | "loading" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [introData, setIntroData] = useState<{ name: string; origin: string } | null>(null);
 
@@ -27,27 +28,52 @@ export function Game() {
 
   const clearIntro = useCallback(() => setIntroData(null), []);
 
+  const checkSession = useCallback(() => {
+    setError(null);
+    setSessionStatus("loading");
+    initSession()
+      .then((status) => setSessionStatus(status))
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : "Cannot reach server");
+        setSessionStatus("error");
+      });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const attempt = () => {
       setError(null);
       initSession()
-        .then(() => { if (!cancelled) setReady(true); })
+        .then((status) => { if (!cancelled) setSessionStatus(status); })
         .catch((e) => {
-          if (!cancelled) setError(e instanceof Error ? e.message : "Cannot reach server");
+          if (!cancelled) {
+            setError(e instanceof Error ? e.message : "Cannot reach server");
+            setSessionStatus("error");
+          }
         });
     };
     attempt();
-    // Retry every 5s if the API is down
-    const id = setInterval(() => { if (!cancelled && !ready) attempt(); }, 5000);
+    const id = setInterval(() => { if (!cancelled && sessionStatus === "error") attempt(); }, 5000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [ready]);
+  }, [sessionStatus]);
 
+  const handleAuth = useCallback(() => {
+    setSessionStatus("valid");
+  }, []);
+
+  const handleGuest = useCallback(async () => {
+    await guestSession();
+    setSessionStatus("valid");
+  }, []);
+
+  const ready = sessionStatus === "valid";
   const meFetcher = useCallback(() => api.me(), []);
   const me = usePolling(ready ? meFetcher : null, 4000);
 
-  if (error) return <Splash note={`API unreachable — retrying… (${error})`} />;
-  if (!ready || me === undefined) return <Splash />;
+  if (sessionStatus === "error") return <Splash note={`API unreachable — retrying… (${error})`} />;
+  if (sessionStatus === "loading") return <Splash />;
+  if (sessionStatus === "none") return <AuthScreen onAuth={handleAuth} onGuest={handleGuest} />;
+  if (me === undefined) return <Splash />;
   if (me === null) return <CreateCharacter onCreated={handleCreated} />;
   if (introData) return <ArrivalIntro name={introData.name} origin={introData.origin} onComplete={clearIntro} />;
   return (

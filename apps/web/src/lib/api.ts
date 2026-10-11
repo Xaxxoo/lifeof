@@ -73,22 +73,48 @@ function clearJwt() {
   try { localStorage.removeItem(JWT_KEY); } catch { /* */ }
 }
 
-/** Ensure a valid guest JWT exists; create one if missing or expired. */
-export async function initSession(): Promise<void> {
+export type SessionStatus = "valid" | "none";
+
+/**
+ * Check if an existing JWT is valid. If invalid/missing, clears it and
+ * returns "none" so the caller can show an auth screen.
+ * Does NOT auto-create a guest session.
+ */
+export async function initSession(): Promise<SessionStatus> {
   if (getJwt()) {
-    // Validate the existing JWT with a lightweight call
     try {
-      await request<unknown>("GET", "/characters/me");
-      return;
+      await request<unknown>("GET", "/auth/me");
+      return "valid";
     } catch {
       clearJwt();
     }
   }
+  return "none";
+}
+
+/** Create a guest session (called explicitly when user clicks "Play as guest"). */
+export async function guestSession(): Promise<void> {
   const data = await request<{ jwt: string }>("POST", "/auth/guest");
   setJwt(data.jwt);
 }
 
+export { clearJwt };
+
 export const api = {
+  // Auth
+  signup: async (email: string, password: string) => {
+    const data = await request<{ jwt: string; userId: string }>("POST", "/auth/signup", { email, password });
+    setJwt(data.jwt);
+    return data;
+  },
+  login: async (email: string, password: string) => {
+    const data = await request<{ jwt: string; userId: string; characterId: string | null }>("POST", "/auth/login", { email, password });
+    setJwt(data.jwt);
+    return data;
+  },
+  authMe: () => request<{ userId?: string; email?: string; characterId?: string; hasCharacter: boolean }>("GET", "/auth/me"),
+  logout: () => { clearJwt(); },
+
   // Characters
   me: () => request<CharacterDoc | null>("GET", "/characters/me"),
   createCharacter: async (body: { name: string; origin: string; status: string; trait: string; gender: string; sexuality: string; look: unknown }) => {

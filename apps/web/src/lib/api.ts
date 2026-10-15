@@ -249,6 +249,10 @@ export const api = {
   // Quests
   questProgress: () => request<QuestProgressDoc | null>("GET", "/quests/progress"),
 
+  // Treasure hunts
+  hunts: () => request<import("./types").HuntDoc[]>("GET", "/hunts"),
+  joinHunt: (huntId: string) => request<import("./types").HuntDoc>("POST", `/hunts/${encodeURIComponent(huntId)}/join`),
+
   // Stories
   availableChapters: () => request<StoryChapterDoc[]>("GET", "/stories/available"),
   startChapter: (chapterId: string) => request<StoryChapterDoc>("POST", "/stories/start", { chapterId }),

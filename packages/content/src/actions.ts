@@ -121,6 +121,11 @@ export const ACTIONS: Record<string, ActionDef> = {
   grill: { id: "grill", label: "Grill with strangers ($5)", kind: "use", durationMs: 12 * SEC, needs: { hunger: 50, social: 20 }, cost: 5, pose: "stand", status: "At the BBQ 🔥" },
   run: { id: "run", label: "Run the loop", kind: "use", durationMs: 12 * SEC, needs: { energy: -20, hygiene: -20, fun: 10 }, pose: "stand", status: "Running 🏃",
     skill: { key: "fitness", xp: 30 } },
+  shoot_hoops: { id: "shoot_hoops", label: "Run a pickup game", kind: "use", durationMs: 12 * SEC, needs: { energy: -20, hygiene: -15, fun: 25, social: 15 },
+    pose: "stand", status: "Hooping 🏀", skill: { key: "fitness", xp: 30 } },
+  // Treasure hunts: only offered where a hunt you joined says to look (see hunts.ts).
+  hunt_search: { id: "hunt_search", label: "Search for the treasure 🔎", kind: "use", durationMs: 6 * SEC, needs: { fun: 10 }, pose: "stand",
+    status: "Searching… 🔎" },
   produce: { id: "produce", label: "Buy fresh produce ($8)", kind: "use", durationMs: 8 * SEC, needs: { hunger: 25 }, cost: 8, pose: "stand", status: "Greenmarket 🥬",
     moodlet: { id: "farmers-market", label: "Supported local farmers", value: 3, hours: 3 } },
 

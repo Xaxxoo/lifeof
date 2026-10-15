@@ -9,7 +9,7 @@ export type PropKind =
   | "counter" | "stool" | "dancefloor" | "djbooth" | "table"
   | "lawn" | "grill" | "drumcircle" | "stall" | "track" | "photospot"
   | "shelf" | "longtable" | "salonchair" | "washer" | "bike" | "crate" | "artwall" | "bookshelf"
-  | "pew" | "altar" | "stage" | "lane";
+  | "pew" | "altar" | "stage" | "lane" | "court";
 
 /** Tags let gigs pick sensible stops: pick up food at "food", drop off at "residential". */
 export type PropTag = "food" | "residential" | "outdoor" | "business" | "vendor";
@@ -313,6 +313,7 @@ export const BUSHWICK = street({
     { id: "hydrant", kind: "hydrant", x: 13, y: 4, w: 1, h: 1 },
     lamp("lamp-1", 1, 4),
     lamp("lamp-2", 15, 9),
+    { id: "court", kind: "court", x: 2, y: 13, w: 5, h: 3, label: "Maria Hernandez Park courts", actions: ["shoot_hoops"], walkable: true, tags: ["outdoor"] },
   ],
   npcs: [
     { id: "tito", name: "Tito", role: "Bodega owner", origin: "santo-domingo", look: look("#b0714d", "waves", "#f3f3f3"),
@@ -459,6 +460,7 @@ export const PROSPECT_PARK: RoomDef = {
     tree("tree-5", 5, 13),
     tree("tree-6", 11, 12),
     bench("bench", 4, 11),
+    { id: "court", kind: "court", x: 12, y: 8, w: 4, h: 3, label: "Parade Ground courts", actions: ["shoot_hoops"], walkable: true, tags: ["outdoor"] },
   ],
   npcs: [
     { id: "andre", name: "Andre", role: "Leads the drum circle", origin: "accra", look: look("#311c11", "locs", "#e0a526"),

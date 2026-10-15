@@ -19,6 +19,7 @@ import {
   type PlacedItem,
   type Prop,
   type RoomDef,
+  placeAt,
 } from "@nyl/content";
 import {
   daylight,
@@ -38,14 +39,15 @@ import { usePolling } from "@/lib/hooks";
 import { applyOps, crossesWall, nearestEdge, wallRun, type BuildTool } from "@/lib/buildTools";
 import { randomId } from "@/lib/id";
 import { serverNow, useGame, type PendingGo } from "@/lib/store";
-import { useSocket } from "@/lib/SocketContext";
+import { useSocket, useSocketEvent } from "@/lib/SocketContext";
 import { useRealtimeChat, useRealtimeOccupants } from "@/lib/useRealtimeData";
-import type { BuildOp, CharacterDoc, CityStateDoc, HomeDoc, MessageDoc, Occupant, PlacedObjectDoc } from "@/lib/types";
+import type { BuildOp, CharacterDoc, CityStateDoc, HomeDoc, HuntDoc, HuntResultEvent, MessageDoc, Occupant, PlacedObjectDoc } from "@/lib/types";
 import { ActionMenu } from "./ActionMenu";
 import { Backdrop } from "./scene/Backdrop";
 import { cityUniforms, nightFactor, skyColor } from "./scene/palette";
 import { BuildPanel, type BuildTab, type Ghost } from "./BuildPanel";
 import { Hud } from "./Hud";
+import { prizeText } from "./HuntsApp";
 import { CityMap } from "./CityMap";
 import { Phone, type PhoneTab } from "./Phone";
 import { Avatar, type ActivityAnchor } from "./scene/Avatar";
@@ -120,6 +122,25 @@ export function World({ roomId }: { roomId: string }) {
   const now = useTick(1000);
   const nowS = now + clockOffset;
   const anchors = useLabelAnchors();
+
+  // Treasure hunt you're on: adds "Search" to real places and shows the clue.
+  const [huntsVersion, setHuntsVersion] = useState(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- huntsVersion refetches after a search lands
+  const huntsFetcher = useCallback(() => api.hunts(), [huntsVersion]);
+  const hunts = usePolling(huntsFetcher, 20000);
+  const activeHunt = hunts?.find((h) => h.joined && h.running && !h.completedAt) ?? null;
+  useSocketEvent<HuntResultEvent>("hunt:result", (r) => {
+    setHuntsVersion((v) => v + 1);
+    if (r.outcome === "already") toast(`You already found the treasure at ${r.placeName}. Check your next clue.`, "info");
+    else if (r.outcome === "miss") toast(`Nothing hidden at ${r.placeName ?? "this spot"}. Read the clue again.`, "info");
+    else if (r.outcome === "found") toast(`Found it at ${r.placeName}! New clue on your phone.`, "good");
+    else if (r.outcome === "finished") toast(`🏆 You finished ${r.huntName} #${r.rank}! Prize: ${prizeText({ prize: { cash: r.cash ?? 0, stellar: r.stellar as HuntDoc["prize"]["stellar"] } })}`, "good");
+    else toast(`You found every stop in ${r.huntName}, but the prizes are all claimed.`, "info");
+  });
+  useSocketEvent<{ txHash: string; asset: string; amount: string }>("hunt:paid", (r) => {
+    setHuntsVersion((v) => v + 1);
+    toast(`${r.amount} ${r.asset} landed in your Stellar wallet.`, "good");
+  });
 
   const [menuKey, setMenuKey] = useState<string | null>(null);
   const [phoneTab, setPhoneTab] = useState<PhoneTab | null>(null);
@@ -427,7 +448,11 @@ export function World({ roomId }: { roomId: string }) {
 
   const menuThing = menuKey ? layout.interactables.get(menuKey) : null;
   const menuActions = menuThing
-    ? [...menuThing.actions, ...(gigStep && gigStep.target === menuKey ? [gigStep.action] : [])]
+    ? [
+        ...menuThing.actions,
+        ...(gigStep && gigStep.target === menuKey ? [gigStep.action] : []),
+        ...(activeHunt && menuKey && placeAt(roomId, menuKey) ? ["hunt_search"] : []),
+      ]
     : [];
   const selectedObj = selectedId ? objects.find((o) => o._id === selectedId) ?? null : null;
   const selectedDoc = selectedId ? rawObjectDocs.find((o) => o.id === selectedId) ?? null : null;
@@ -623,6 +648,11 @@ export function World({ roomId }: { roomId: string }) {
           setPhoneTab(null);
           setMapOpen(true);
         }}
+        onOpenHunts={() => {
+          setMenuKey(null);
+          setPhoneTab("hunts");
+        }}
+        hunt={activeHunt}
         hideBottomPanels={buildMode || !!phoneTab || !!menuThing || mapOpen}
       />
 

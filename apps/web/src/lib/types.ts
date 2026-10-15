@@ -255,3 +255,35 @@ export type BuildOp =
   | { op: "add"; seg: import("@nyl/content").WallSeg }
   | { op: "remove"; x: number; y: number; side: "n" | "w" }
   | { op: "floor"; x: number; y: number; floorId: string | null };
+
+export interface HuntDoc {
+  id: string;
+  name: string;
+  blurb: string;
+  sponsor: { name: string; color: string; url?: string };
+  startsAt: number;
+  endsAt: number;
+  running: boolean;
+  totalSteps: number;
+  prize: { cash: number; stellar?: { asset: "XLM" | "USDT"; amount: string } };
+  supply: number;
+  claimed: number;
+  joined: boolean;
+  step: number;
+  /** The current riddle; null until joined, and once finished. */
+  clue: string | null;
+  found: { name: string; neighborhood: string; at: number | null }[];
+  completedAt: number | null;
+  rank: number | null;
+  payout: { status: "pending" | "paid" | "failed"; asset: string; amount: string; txHash: string | null } | null;
+}
+
+export interface HuntResultEvent {
+  huntId: string;
+  huntName: string;
+  outcome: "found" | "finished" | "finished-late" | "miss" | "already";
+  placeName?: string;
+  rank?: number | null;
+  cash?: number;
+  stellar?: { asset: string; amount: string } | null;
+}

@@ -44,6 +44,7 @@ import { GigsService } from "../gigs/gigs.service";
 import { CityService } from "../city/city.service";
 import { EventsGateway } from "../events/events.gateway";
 import { QuestsService } from "../quests/quests.service";
+import { HuntsService } from "../hunts/hunts.service";
 
 const HOUR = 3_600_000;
 const TRAIN_DELAY_MS = 2 * 60_000;
@@ -85,6 +86,7 @@ export class PlayService {
     private city: CityService,
     @Inject(forwardRef(() => EventsGateway)) private gateway: EventsGateway,
     private quests: QuestsService,
+    private hunts: HuntsService,
   ) {}
 
   async start(token: string, target: string, actionId: string, dest?: string) {
@@ -121,9 +123,12 @@ export class PlayService {
       if (!thing) throw new BadRequestException("That isn't here");
       const gigStep = c.gig && c.gig.roomId === p.roomId ? c.gig.steps[c.gig.step] : undefined;
       const isGigStop = !!gigStep && gigStep.target === target && gigStep.action === actionId;
-      if (!thing.actions.includes(actionId) && !isGigStop) throw new BadRequestException("You can't do that here");
+      // Treasure hunts: you can search any real place; whether it's the right one is only known when you finish.
+      const isHuntSearch = actionId === "hunt_search";
+      if (isHuntSearch) await this.hunts.assertCanSearch(c.id, p.roomId, target, now);
+      if (!thing.actions.includes(actionId) && !isGigStop && !isHuntSearch) throw new BadRequestException("You can't do that here");
 
-      if (target.startsWith("prop:")) {
+      if (target.startsWith("prop:") && !isHuntSearch) {
         const prop = room.props.find((x) => `prop:${x.id}` === target);
         if (prop?.open && !openNow(prop.open, now)) throw new BadRequestException(`Closed right now. ${hoursText(prop.open)}`);
       }
@@ -414,6 +419,9 @@ export class PlayService {
     // Quest triggers
     if (a.kind === "use" && a.actionId && progress >= 0.99) {
       this.quests.checkTrigger(c.id, "complete_action", a.actionId).catch(() => {});
+    }
+    if (a.actionId === "hunt_search" && progress >= 0.99) {
+      this.hunts.onSearched(c.id, a.id, a.roomId, a.target, now).catch((err) => this.logger.warn(`hunt search failed: ${err}`));
     }
     if (a.kind === "ride" && patch.roomId) {
       this.quests.checkTrigger(c.id, "complete_ride").catch(() => {});

@@ -7,7 +7,9 @@ import {
   HOME_TIERS,
   ITEM_BY_ID,
   ITEMS,
+  LAUNCH_HUNTS,
   LOTS,
+  PLACES,
   ROOMS,
   SHOPS,
   STREETS,
@@ -17,6 +19,8 @@ import {
   emptyLotLayout,
   goalTiles,
   homeRoomDef,
+  huntProblems,
+  placeAt,
   roomDef,
   route,
 } from "./index";
@@ -145,5 +149,48 @@ describe("baseRoomId", () => {
 
   it("leaves shop rooms unchanged", () => {
     expect(baseRoomId("shop:crown-heights:patty")).toBe("shop:crown-heights:patty");
+  });
+});
+
+describe("places", () => {
+  it("point at a tappable, reachable prop on a real block", () => {
+    for (const place of PLACES) {
+      const room = ROOMS[place.roomId];
+      expect(room, place.id).toBeDefined();
+      const { grid, interactables } = buildRoomLayout(room!, []);
+      const thing = interactables.get(place.target);
+      expect(thing, `${place.id}: ${place.target}`).toBeDefined();
+      expect(findPathToAny(grid, room!.spawn, goalTiles(thing!)), `${place.id} unreachable`).not.toBeNull();
+    }
+  });
+
+  it("have unique ids and one place per prop", () => {
+    expect(new Set(PLACES.map((p) => p.id)).size).toBe(PLACES.length);
+    expect(new Set(PLACES.map((p) => `${p.roomId}/${p.target}`)).size).toBe(PLACES.length);
+  });
+
+  it("resolve from a tapped prop", () => {
+    expect(placeAt("dumbo", "prop:pizza")?.id).toBe("grimaldis");
+    expect(placeAt("dumbo", "prop:bench")).toBeUndefined();
+  });
+});
+
+describe("hunts", () => {
+  it("launch campaigns are valid", () => {
+    for (const h of LAUNCH_HUNTS) expect(huntProblems(h), h.id).toEqual([]);
+  });
+
+  it("rejects broken campaigns", () => {
+    const good = LAUNCH_HUNTS[0]!;
+    expect(huntProblems({ ...good, id: "Bad Id!" })).not.toEqual([]);
+    expect(huntProblems({ ...good, steps: [{ placeId: "nowhere", clue: "?" }] })).not.toEqual([]);
+    expect(huntProblems({ ...good, steps: [good.steps[0]!, good.steps[0]!] })).not.toEqual([]);
+    expect(huntProblems({ ...good, supply: 0 })).not.toEqual([]);
+    expect(huntProblems({ ...good, endsAt: good.startsAt })).not.toEqual([]);
+    expect(huntProblems({ ...good, prize: { cash: 10, stellar: { asset: "XLM", amount: "-1" } } })).not.toEqual([]);
+  });
+
+  it("memo for the last finisher fits in 28 bytes", () => {
+    for (const h of LAUNCH_HUNTS) expect(`hunt:${h.id}#${h.supply}`.length).toBeLessThanOrEqual(28);
   });
 });

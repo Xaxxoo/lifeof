@@ -22,6 +22,7 @@ import {
 } from "@nyl/content";
 import { weatherEffectText } from "@nyl/game-core";
 import { LineBullet, lineColor } from "./LineBullet";
+import { HuntsApp } from "./HuntsApp";
 import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { usePolling } from "@/lib/hooks";
@@ -29,7 +30,7 @@ import { serverNow, useGame } from "@/lib/store";
 import type { CharacterDoc, CityStateDoc, RelationshipDoc, BlockedPlayerDoc, DmThreadDoc, DirectMessageDoc, CrewDoc, ListingDoc, ApplicationDoc, LeaseDoc, QuestProgressDoc, StoryChapterDoc } from "@/lib/types";
 import { SOCIAL_INTERACTIONS, SOCIAL_INTERACTION_LIST, RELATIONSHIP_LEVELS } from "@nyl/content";
 
-export type PhoneTab = "map" | "gigs" | "jobs" | "bank" | "wallet" | "me" | "shop" | "today" | "settings" | "people" | "chats" | "homes";
+export type PhoneTab = "hunts" | "map" | "gigs" | "jobs" | "bank" | "wallet" | "me" | "shop" | "today" | "settings" | "people" | "chats" | "homes";
 
 export function Phone({
   me,
@@ -67,7 +68,7 @@ export function Phone({
         </button>
       </div>
       <div className="mt-2 flex flex-wrap gap-1 px-3">
-        {(["map", "people", "chats", "gigs", "jobs", "bank", "wallet", "me", "shop", "homes", "today", "settings"] as PhoneTab[]).map((t) => (
+        {(["hunts", "map", "people", "chats", "gigs", "jobs", "bank", "wallet", "me", "shop", "homes", "today", "settings"] as PhoneTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -78,6 +79,7 @@ export function Phone({
         ))}
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3">
+        {tab === "hunts" && <HuntsApp />}
         {tab === "map" && <MapApp me={me} city={city} onRide={onRide ?? (() => {})} />}
         {tab === "people" && <People me={me} />}
         {tab === "chats" && <Chats me={me} />}

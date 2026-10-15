@@ -268,6 +268,60 @@ export class StellarService {
     }
   }
 
+  // ── Rewards (treasure hunt prizes) ──────────────────────
+
+  get treasuryConfigured() {
+    return !!this.masterSecret;
+  }
+
+  /**
+   * Pay a prize from the game treasury (the master account) to a player's wallet, tagged with `memo`.
+   * Safe to retry: if a payment with this memo already landed in the wallet, returns its hash instead of paying again.
+   */
+  async sendReward(characterId: string, asset: "XLM" | "USDT", amount: string, memo: string): Promise<{ txHash: string }> {
+    if (!this.masterSecret) throw new Error("Stellar treasury not configured (STELLAR_MASTER_SECRET)");
+    if (asset === "USDT" && !this.usdtIssuer) throw new Error("USDT prizes need STELLAR_USDT_ISSUER");
+
+    await this.createWallet(characterId);
+    let wallet = await this.wallets.findOneOrFail({ where: { characterId } });
+    if (!wallet.funded || (asset === "USDT" && !wallet.trustlineEstablished)) {
+      await this.fundAndTrust(wallet);
+      wallet = await this.wallets.findOneOrFail({ where: { characterId } });
+    }
+    if (!wallet.funded) throw new Error("Wallet not funded yet");
+
+    const already = await this.findPaymentByMemo(wallet.publicKey, memo);
+    if (already) return { txHash: already };
+
+    const { Keypair, TransactionBuilder, Operation, Asset, Memo } = await sdk();
+    const server = await this.horizon();
+    const masterKp = Keypair.fromSecret(this.masterSecret);
+    const masterAccount = await server.loadAccount(masterKp.publicKey());
+    const tx = new TransactionBuilder(masterAccount, { fee: "100", networkPassphrase: await this.networkPassphrase() })
+      .addOperation(
+        Operation.payment({
+          destination: wallet.publicKey,
+          asset: asset === "XLM" ? Asset.native() : new Asset(this.usdtCode, this.usdtIssuer),
+          amount,
+        }),
+      )
+      .addMemo(Memo.text(memo))
+      .setTimeout(60)
+      .build();
+    tx.sign(masterKp);
+    const result = await server.submitTransaction(tx);
+    this.log.log(`Reward ${amount} ${asset} → ${wallet.publicKey} (${memo}): ${result.hash}`);
+    return { txHash: result.hash };
+  }
+
+  /** Hash of a recent transaction into this account carrying `memo`, if any. */
+  private async findPaymentByMemo(publicKey: string, memo: string): Promise<string | null> {
+    const server = await this.horizon();
+    const page = await server.transactions().forAccount(publicKey).order("desc").limit(100).call();
+    const hit = page.records.find((t) => t.memo_type === "text" && t.memo === memo && t.successful);
+    return hit?.hash ?? null;
+  }
+
   // ── Wallet info ─────────────────────────────────────────
 
   async getWalletInfo(characterId: string) {

@@ -5,6 +5,16 @@ A multiplayer life sim in the browser. You just landed in New York with two suit
 - **Product spec:** [`docs/PRD.md`](docs/PRD.md) (the editable team copy lives in Claude Docs; link at the top of the file)
 - **Current milestone:** M2 The city: seven neighborhoods, the subway, venues, NPCs, gigs and more Live City.
 
+## Treasure hunts (brand campaigns)
+
+Partners run hunts that send players to real places on the map. Each step is a clue; players travel there, tap the place and **Search for the treasure**. Wrong spot = 20 s cooldown. The first `supply` finishers win in-game cash plus an optional Stellar payment (XLM or USDT) from the treasury account, with memo `hunt:<id>#<rank>` so every payout is verifiable on-chain.
+
+- Places players can be sent to: `packages/content/src/places.ts` (`real: false` = open storefront a partner can brand)
+- Campaign rules and the launch hunt: `packages/content/src/hunts.ts`
+- Players: Phone → Hunts. API: `GET /hunts`, `POST /hunts/:id/join`
+- Partners/ops (`x-admin-key: $HUNT_ADMIN_KEY`): `PUT /hunts/admin/campaigns` (create/update), `POST /hunts/admin/campaigns/:id/active`, `GET /hunts/admin/campaigns/:id/report`
+- Prizes need `STELLAR_MASTER_SECRET` funded with the prize asset; failed payouts retry every minute (up to 8 tries).
+
 ## What's in M2
 
 | Area | Status |

@@ -18,7 +18,7 @@ import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { useGame } from "@/lib/store";
 import { useSocket } from "@/lib/SocketContext";
-import type { CharacterDoc, CityStateDoc } from "@/lib/types";
+import type { CharacterDoc, CityStateDoc, HuntDoc } from "@/lib/types";
 
 const NEED_LABEL: Record<NeedKey, string> = {
   hunger: "Hunger",
@@ -54,6 +54,9 @@ interface HudProps {
   onToggleBuild: () => void;
   onOpenPhone: () => void;
   onOpenMap: () => void;
+  onOpenHunts: () => void;
+  /** The treasure hunt you're on, if any: its clue shows above the activity bar. */
+  hunt: HuntDoc | null;
   hideBottomPanels: boolean;
 }
 
@@ -70,6 +73,8 @@ export function Hud({
   onToggleBuild,
   onOpenPhone,
   onOpenMap,
+  onOpenHunts,
+  hunt,
   hideBottomPanels,
 }: HudProps) {
   const [todayOpen, setTodayOpen] = useState(false);
@@ -134,6 +139,18 @@ export function Hud({
 
       {/* Bottom: activity, mood, chat, phone */}
       <div className="absolute inset-x-0 bottom-0 z-20 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {hunt?.clue && !hideBottomPanels && (
+          <button
+            onClick={onOpenHunts}
+            className="mx-auto mb-2 flex w-full max-w-md items-center gap-2 rounded-xl bg-black/75 px-3 py-2 text-left backdrop-blur"
+            style={{ borderLeft: `4px solid ${hunt.sponsor.color}` }}
+          >
+            <span className="text-base">🗝️</span>
+            <p className="min-w-0 flex-1 truncate text-xs">
+              <span className="font-semibold">Clue {hunt.step + 1}/{hunt.totalSteps}:</span> {hunt.clue}
+            </p>
+          </button>
+        )}
         {gig && gigStep && !hideBottomPanels && (
           <div className="mx-auto mb-2 flex max-w-md items-center gap-2 rounded-xl bg-[#f3a712]/95 px-3 py-2 text-black">
             <span className="text-base">{gigDef?.emoji}</span>

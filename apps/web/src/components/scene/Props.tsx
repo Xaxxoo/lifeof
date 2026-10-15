@@ -15,6 +15,7 @@ export function propLabelPos(p: Prop): [number, number, number] {
   // Above the roofline, clear of the people on the sidewalk.
   if (p.kind === "building") return [cx, buildingHeight(p) + 0.5, p.y + p.h - 0.4];
   if (p.kind === "lawn" || p.kind === "dancefloor" || p.kind === "track" || p.kind === "drumcircle") return [cx, 0.6, p.y + p.h / 2];
+  if (p.kind === "court") return [cx, 2.9, p.y + p.h / 2];
   if (p.kind === "counter" || p.kind === "djbooth") return [cx, 1.6, p.y + p.h / 2];
   if (p.kind === "bookshelf" || p.kind === "artwall") return [cx, 2.4, p.y + p.h / 2];
   return [cx, 1.9, p.y + p.h / 2];
@@ -115,6 +116,8 @@ function PropMesh({ prop: p, night }: { prop: Prop; night: boolean }) {
           <meshStandardMaterial color={CITY.grass} />
         </mesh>
       );
+    case "court":
+      return <Court prop={p} night={night} />;
     case "track":
       return (
         <mesh rotation-x={-Math.PI / 2} position={[cx, 0.012, cz]} receiveShadow>
@@ -533,6 +536,54 @@ function PropMesh({ prop: p, night }: { prop: Prop; night: boolean }) {
         </group>
       );
   }
+}
+
+/** A public basketball court: painted hardcourt, lines, and a hoop at each end. */
+function Court({ prop: p, night }: { prop: Prop; night: boolean }) {
+  const cx = p.x + p.w / 2;
+  const cz = p.y + p.h / 2;
+  const line = <meshStandardMaterial color="#f4f1ea" emissive="#ffffff" emissiveIntensity={night ? 0.15 : 0} />;
+  return (
+    <group position={[cx, 0, cz]}>
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.012, 0]} receiveShadow>
+        <planeGeometry args={[p.w - 0.1, p.h - 0.1]} />
+        <meshStandardMaterial color="#3f6e8c" />
+      </mesh>
+      {/* Paint inside each key */}
+      {[-1, 1].map((side) => (
+        <mesh key={`key-${side}`} rotation-x={-Math.PI / 2} position={[side * (p.w / 2 - 0.75), 0.014, 0]}>
+          <planeGeometry args={[1.3, 1.2]} />
+          <meshStandardMaterial color="#c0503a" />
+        </mesh>
+      ))}
+      {/* Half-court line and center circle */}
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.016, 0]}>
+        <planeGeometry args={[0.05, p.h - 0.2]} />
+        {line}
+      </mesh>
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.016, 0]}>
+        <ringGeometry args={[0.45, 0.5, 24]} />
+        {line}
+      </mesh>
+      {/* Hoops: pole, backboard, orange rim */}
+      {[-1, 1].map((side) => (
+        <group key={`hoop-${side}`} position={[side * (p.w / 2 - 0.05), 0, 0]}>
+          <mesh position={[0, 1.15, 0]} castShadow>
+            <cylinderGeometry args={[0.05, 0.05, 2.3, 8]} />
+            <meshStandardMaterial color="#2b2b30" />
+          </mesh>
+          <mesh position={[-side * 0.12, 2.25, 0]} castShadow>
+            <boxGeometry args={[0.05, 0.6, 0.9]} />
+            <meshStandardMaterial color="#f4f1ea" />
+          </mesh>
+          <mesh position={[-side * 0.36, 2.05, 0]} rotation-x={-Math.PI / 2}>
+            <torusGeometry args={[0.2, 0.025, 6, 16]} />
+            <meshStandardMaterial color="#e4572e" />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
 }
 
 /** A storefront on the block: a tinted, lit-window tower with an awning and a glowing shop window. */

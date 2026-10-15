@@ -13,3 +13,5 @@ export * from "./social";
 export * from "./crews";
 export * from "./quests";
 export * from "./stories";
+export * from "./places";
+export * from "./hunts";

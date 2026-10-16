@@ -8,10 +8,10 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "test:load": "nest build && node --import tsx test/instances.load.ts",
     "migration:generate": "tsx ../../node_modules/typeorm/cli.js migration:generate -d src/config/data-source.ts src/migrations/migration",
     "migration:run": "tsx ../../node_modules/typeorm/cli.js migration:run -d src/config/data-source.ts",
-    "migration:revert": "tsx ../../node_modules/typeorm/cli.js migration:revert -d src/config/data-source.ts"
+    "migration:revert": "tsx ../../node_modules/typeorm/cli.js migration:revert -d src/config/data-source.ts",
+    "test:load": "nest build && node --import tsx test/instances.load.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

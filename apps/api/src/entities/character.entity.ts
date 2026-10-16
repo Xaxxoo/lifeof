@@ -112,6 +112,14 @@ export class Character {
   @Column({ type: "bigint", default: () => "EXTRACT(EPOCH FROM now()) * 1000" })
   createdAt!: number;
 
+  /** Can't send room chat or DMs until this time (ms). */
+  @Column({ type: "bigint", nullable: true })
+  chatMutedUntil!: number | null;
+
+  /** Locked out of the game until this time (ms); PERMANENT for a permanent ban. */
+  @Column({ type: "bigint", nullable: true })
+  bannedUntil!: number | null;
+
   /** Origin story progress: maps origin → completed chapter number. */
   @Column({ type: "jsonb", default: () => "'{}'" })
   storyProgress!: Record<string, number>;

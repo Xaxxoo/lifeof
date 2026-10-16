@@ -44,10 +44,7 @@ export class DmService {
     const text = body.trim().slice(0, MAX_DM_LEN);
     if (!text) throw new BadRequestException("Message can't be empty");
 
-    // Moderation
-    if (!this.moderation.localCheck(text)) {
-      throw new BadRequestException("That message can't be sent");
-    }
+    await this.moderation.screen(sender, text, "dm");
 
     const needsHold = this.moderation.needsHold(sender);
     const dm = await this.dms.save({

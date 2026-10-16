@@ -6,3 +6,4 @@ export * from "./skills";
 export * from "./activity";
 export * from "./weather";
 export * from "./social";
+export * from "./moderation";

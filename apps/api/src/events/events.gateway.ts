@@ -131,7 +131,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
       }
     } catch (e) {
-      socket.emit("error", { message: e instanceof Error ? e.message : "Chat failed" });
+      socket.emit("chat:rejected", { roomId: data.roomId, message: e instanceof Error ? e.message : "Chat failed" });
     }
   }
 

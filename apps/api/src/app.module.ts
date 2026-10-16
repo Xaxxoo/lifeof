@@ -38,7 +38,11 @@ import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
       useFactory: databaseConfig,
     }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 60 }] }),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 60 }],
+      // The e2e tests sign up many players from one IP; never honoured in production.
+      skipIf: () => process.env.DISABLE_THROTTLE === "1" && process.env.NODE_ENV !== "production",
+    }),
     AuthModule,
     CharactersModule,
     WorldModule,

@@ -2,7 +2,7 @@ import { Injectable, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { skillLevel, upsertMoodlet, weatherKind, type Moodlet, type Skills } from "@nyl/game-core";
-import { GIGS, GIG_BY_ID, GIG_WINDOW_MS, buildRoomLayout, roomDef, type GigDef } from "@nyl/content";
+import { GIGS, GIG_BY_ID, GIG_WINDOW_MS, baseRoomId, buildRoomLayout, roomDef, type GigDef } from "@nyl/content";
 import { Character } from "../entities/character.entity";
 import { CityState } from "../entities/city-state.entity";
 import { BankService } from "../bank/bank.service";
@@ -81,7 +81,8 @@ export class GigsService {
 
   async offers(token: string, window: number) {
     const c = await this.requireByToken(token);
-    return offersFor(c, c.roomId, window);
+    // Gigs belong to the block, not to one busy copy of it.
+    return offersFor(c, baseRoomId(c.roomId), window);
   }
 
   async accept(token: string, offerId: string) {
@@ -91,10 +92,11 @@ export class GigsService {
     const parts = offerId.split(":");
     const roomId = parts[1]!;
     const window = Number(parts[2]);
-    if (roomId !== c.roomId || !Number.isFinite(window) || Math.floor(now / GIG_WINDOW_MS) - window > 1) {
+    const here = baseRoomId(c.roomId);
+    if (roomId !== here || !Number.isFinite(window) || Math.floor(now / GIG_WINDOW_MS) - window > 1) {
       throw new BadRequestException("That gig is gone. Refresh the app");
     }
-    const offer = offersFor(c, c.roomId, window).find((o) => o.offerId === offerId);
+    const offer = offersFor(c, here, window).find((o) => o.offerId === offerId);
     if (!offer) throw new BadRequestException("That gig is gone. Refresh the app");
     if (offer.locked) throw new BadRequestException(offer.locked);
     const def = GIG_BY_ID[offer.gigId]!;
@@ -102,7 +104,7 @@ export class GigsService {
       gig: {
         id: `${offerId}:${now}`,
         gigId: offer.gigId,
-        roomId: c.roomId,
+        roomId: here,
         steps: offer.steps.map(({ target, label, action }) => ({ target, label, action })),
         step: 0,
         pay: offer.pay,

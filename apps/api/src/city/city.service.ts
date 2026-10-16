@@ -58,7 +58,7 @@ export class CityService {
   arrivalMoodlets(city: CityState | null, roomId: string, moodlets: Moodlet[], now: number): Moodlet[] {
     const room = roomDef(roomId);
     if (!city || !room || (room.kind !== "street" && room.kind !== "park")) return moodlets;
-    const top = city.blockEvents.items.find((i) => i.neighborhood === roomId);
+    const top = city.blockEvents.items.find((i) => i.neighborhood === room.id);
     const m = top ? BLOCK_MOODLETS[top.type] : undefined;
     if (!m) return moodlets;
     return upsertMoodlet(moodlets, { ...m, expiresAt: now + 3_600_000 }, now);

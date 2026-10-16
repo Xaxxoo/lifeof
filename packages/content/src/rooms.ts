@@ -630,23 +630,34 @@ export const STREET_ID = CROWN_HEIGHTS.id;
 export const homeRoomId = (characterId: string) => `home:${characterId}`;
 export const isHomeRoom = (roomId: string) => roomId.startsWith("home:");
 
-/** Room layout for any room id, including private homes. */
+/** Room layout for any room id, including private homes. Instances (`crown-heights:3`) share their base room's layout. */
 export function roomDef(roomId: string): RoomDef | null {
   if (isHomeRoom(roomId)) return { ...BASEMENT_ROOM, id: roomId };
-  return ROOMS[roomId] ?? null;
+  return ROOMS[baseRoomId(roomId)] ?? null;
 }
 
 /**
- * Strip instance suffix from a room id. `venue:warehouse:2` → `venue:warehouse`.
- * Streets and homes are never instanced, so they pass through unchanged.
+ * Busy rooms split into copies ("instances") so a crowd can't break one room. Instance 1 is the
+ * plain room id; instance N is `${base}:${N}`. Homes are private and never instanced.
  */
+export const isInstanceable = (roomId: string) => !isHomeRoom(roomId) && !!ROOMS[baseRoomId(roomId)];
+
+/** Strip the instance suffix: `venue:warehouse:2` → `venue:warehouse`, `crown-heights:12` → `crown-heights`. */
 export function baseRoomId(roomId: string): string {
   if (isHomeRoom(roomId) || !roomId.includes(":")) return roomId;
-  // Instance suffix is `:N` where N is 1–9 at the very end
-  const m = roomId.match(/^(.+):(\d)$/);
+  const m = roomId.match(/^(.+):(\d+)$/);
   if (m && ROOMS[m[1]!]) return m[1]!;
   return roomId;
 }
+
+/** Which copy of its room this is (1 for the plain room id). */
+export function instanceNumber(roomId: string): number {
+  const base = baseRoomId(roomId);
+  return base === roomId ? 1 : Number(roomId.slice(base.length + 1));
+}
+
+/** The room id for copy `n` of a base room. */
+export const instanceRoomId = (base: string, n: number) => (n <= 1 ? base : `${base}:${n}`);
 
 /** Map positions for the phone's Brooklyn map (rough geography, not to scale). */
 export const NEIGHBORHOOD_MAP: Record<string, { x: number; y: number }> = {

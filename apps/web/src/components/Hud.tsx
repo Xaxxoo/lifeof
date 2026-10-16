@@ -13,7 +13,8 @@ import {
   weatherNeedMultipliers,
   type NeedKey,
 } from "@nyl/game-core";
-import { GIG_BY_ID, ROOMS } from "@nyl/content";
+import { GIG_BY_ID, ROOMS, baseRoomId } from "@nyl/content";
+import { InstanceBadge } from "./InstanceBadge";
 import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { useGame } from "@/lib/store";
@@ -107,6 +108,7 @@ export function Hud({
             {city ? `${Math.round(city.weather.tempF)}°F · ${city.weather.summary}` : "Brooklyn"}
           </p>
           <p className="hidden truncate text-[10px] text-white/45 sm:block">{place}</p>
+          <InstanceBadge roomId={roomId} />
         </div>
         <button
           onClick={() => setTodayOpen((v) => !v)}
@@ -156,7 +158,7 @@ export function Hud({
             <span className="text-base">{gigDef?.emoji}</span>
             <p className="min-w-0 flex-1 truncate text-xs font-semibold">
               {gigDef?.app}: {gigStep.label} at {gigPlace ?? "the marked spot"}
-              {gig.roomId !== roomId ? ` (${ROOMS[gig.roomId]?.neighborhood})` : ""}
+              {gig.roomId !== baseRoomId(roomId) ? ` (${ROOMS[gig.roomId]?.neighborhood})` : ""}
             </p>
             <span className="text-[11px] font-semibold tabular-nums">{fmt(Math.max(0, gig.deadline - nowS))}</span>
           </div>

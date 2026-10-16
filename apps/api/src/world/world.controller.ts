@@ -40,6 +40,13 @@ export class WorldController {
     return this.world.roomObjects(roomId);
   }
 
+  /** Copies of your current room: head counts and which friends are in each. */
+  @Get("instances")
+  @UseGuards(JwtAuthGuard)
+  instances(@Req() req: { user: { token: string } }) {
+    return this.world.instances(req.user.token);
+  }
+
   @Get("where-am-i")
   @UseGuards(JwtAuthGuard)
   whereAmI(@Req() req: { user: { token: string } }) {

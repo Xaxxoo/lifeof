@@ -19,6 +19,7 @@ import {
   type PlacedItem,
   type Prop,
   type RoomDef,
+  baseRoomId,
   placeAt,
 } from "@nyl/content";
 import {
@@ -164,7 +165,7 @@ export function World({ roomId }: { roomId: string }) {
   const myIntent =
     localIntent && (!serverIntent || localIntent.startedAt > serverIntent.startedAt + 250) ? localIntent : serverIntent;
   const standing = myIntent ? tileAt(myIntent, nowS) : null;
-  const gigStep = me?.gig && me.gig.roomId === roomId ? me.gig.steps[me.gig.step] : undefined;
+  const gigStep = me?.gig && me.gig.roomId === baseRoomId(roomId) ? me.gig.steps[me.gig.step] : undefined;
 
   const ghostValid = useMemo(() => (ghost ? canPlace(room, objects, ghost, standing) : false), [room, objects, ghost, standing]);
   const isOwner = !!home && !!me && home.ownerId === me.id;
@@ -316,7 +317,7 @@ export function World({ roomId }: { roomId: string }) {
   /** From the map: walk if it's on this block, step outside if it's right outside, otherwise ride there. */
   async function goTo(dest: PendingGo) {
     closePanels();
-    if (dest.roomId === roomId) {
+    if (dest.roomId === baseRoomId(roomId)) {
       walkToThing(dest.target, dest);
       return;
     }
@@ -347,7 +348,7 @@ export function World({ roomId }: { roomId: string }) {
 
   // Arrived where the map sent us: finish the trip.
   useEffect(() => {
-    if (!pendingGo || pendingGo.roomId !== roomId || !myIntent) return;
+    if (!pendingGo || pendingGo.roomId !== baseRoomId(roomId) || !myIntent) return;
     setPendingGo(null);
     walkToThing(pendingGo.target, pendingGo);
   });

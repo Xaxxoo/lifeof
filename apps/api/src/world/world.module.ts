@@ -7,9 +7,11 @@ import { Presence } from "../entities/presence.entity";
 import { PlacedObject } from "../entities/placed-object.entity";
 import { CityState } from "../entities/city-state.entity";
 import { Home } from "../entities/home.entity";
+import { Relationship } from "../entities/relationship.entity";
+import { CrewMember } from "../entities/crew-member.entity";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Character, Presence, PlacedObject, CityState, Home])],
+  imports: [TypeOrmModule.forFeature([Character, Presence, PlacedObject, CityState, Home, Relationship, CrewMember])],
   controllers: [WorldController],
   providers: [WorldService],
   exports: [WorldService],

@@ -17,6 +17,8 @@ export class ChatService {
 
   async say(token: string, roomId: string, body: string): Promise<Message | null> {
     const c = await this.requireByToken(token);
+    // Chat is per room copy: you can only talk where you are.
+    if (roomId !== c.roomId) throw new BadRequestException("You're not in that room");
     const text = body.trim().slice(0, MAX_LEN);
     if (!text) return null;
 

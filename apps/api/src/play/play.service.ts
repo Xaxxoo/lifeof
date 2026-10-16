@@ -35,6 +35,7 @@ import {
   roomDef,
   route,
   type OpenHours,
+  baseRoomId,
 } from "@nyl/content";
 import { Character } from "../entities/character.entity";
 import { Presence } from "../entities/presence.entity";
@@ -121,7 +122,7 @@ export class PlayService {
     } else {
       const thing = loaded.interactables.get(target);
       if (!thing) throw new BadRequestException("That isn't here");
-      const gigStep = c.gig && c.gig.roomId === p.roomId ? c.gig.steps[c.gig.step] : undefined;
+      const gigStep = c.gig && c.gig.roomId === baseRoomId(p.roomId) ? c.gig.steps[c.gig.step] : undefined;
       const isGigStop = !!gigStep && gigStep.target === target && gigStep.action === actionId;
       // Treasure hunts: you can search any real place; whether it's the right one is only known when you finish.
       const isHuntSearch = actionId === "hunt_search";
@@ -346,16 +347,14 @@ export class PlayService {
     if (a.kind === "travel" && a.travelTo && now >= a.startsAt) {
       const from = await this.world.roomFor(a.roomId);
       const at = a.actionId === "go_out" ? from?.exitTo?.at : undefined;
-      await this.world.moveToRoom(c.id, a.travelTo, now, at);
-      patch.roomId = a.travelTo;
+      patch.roomId = await this.world.moveToRoom(c.id, a.travelTo, now, at);
       moodlets = this.city.arrivalMoodlets(cityState, a.travelTo, moodlets, now);
     }
 
     if (a.kind === "ride") {
       if (c.roomId === "transit" && a.travelTo) {
         const to = roomDef(a.travelTo);
-        await this.world.moveToRoom(c.id, a.travelTo, now, to?.arrivals?.subway);
-        patch.roomId = a.travelTo;
+        patch.roomId = await this.world.moveToRoom(c.id, a.travelTo, now, to?.arrivals?.subway);
         moodlets = this.city.arrivalMoodlets(cityState, a.travelTo, moodlets, now);
       } else if (early) {
         await this.bank.addMoney(c.id, SUBWAY_FARE, "transit:refund", `refund:${a.id}`, {
@@ -402,8 +401,7 @@ export class PlayService {
         }
         patch.job = job;
         const station = roomDef(a.roomId);
-        await this.world.moveToRoom(c.id, a.roomId, now, station?.arrivals?.subway);
-        patch.roomId = a.roomId;
+        patch.roomId = await this.world.moveToRoom(c.id, a.roomId, now, station?.arrivals?.subway);
       }
     }
 
@@ -425,10 +423,10 @@ export class PlayService {
     }
     if (a.kind === "ride" && patch.roomId) {
       this.quests.checkTrigger(c.id, "complete_ride").catch(() => {});
-      this.quests.checkTrigger(c.id, "arrive_room", patch.roomId).catch(() => {});
+      this.quests.checkTrigger(c.id, "arrive_room", baseRoomId(patch.roomId)).catch(() => {});
     }
     if (a.kind === "travel" && patch.roomId) {
-      this.quests.checkTrigger(c.id, "arrive_room", patch.roomId).catch(() => {});
+      this.quests.checkTrigger(c.id, "arrive_room", baseRoomId(patch.roomId)).catch(() => {});
       if (patch.roomId.startsWith("home:")) {
         this.quests.checkTrigger(c.id, "arrive_home").catch(() => {});
       }

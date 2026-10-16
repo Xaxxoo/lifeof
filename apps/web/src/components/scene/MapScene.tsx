@@ -42,7 +42,7 @@ export function placeSpot(p: Place, places: Place[]) {
 }
 
 /**
- * Brooklyn from above in the city's dusk style: neighborhoods as clusters of lit buildings, the East
+ * Brooklyn and Lower Manhattan from above in the city's dusk style: neighborhoods as clusters of lit buildings, the East
  * River, Prospect Park, live subway lines, and a landmark with a pin for every place you can go.
  */
 export function MapScene({
@@ -72,6 +72,8 @@ export function MapScene({
       <directionalLight position={[60, 90, 40]} intensity={1.1} color="#ffd8c0" />
       <Ground />
       <Water />
+      <Manhattan />
+      <MapBridge from="dumbo" to="chinatown" />
       <Park />
       <SubwayLines lineStatus={lineStatus} />
       <Districts places={places} onFocus={onFocus} />
@@ -106,7 +108,7 @@ function Rig({ focus }: { focus: string | null }) {
   useLayoutEffect(() => {
     // Portrait screens need to back off further to fit the whole borough across.
     const fit = Math.max(1, 0.9 / aspect);
-    const c = focus ? hoodCenter(focus) : { x: 2, z: 10 };
+    const c = focus ? hoodCenter(focus) : { x: -10, z: 8 };
     goal.current = {
       target: new Vector3(c.x, 0, c.z),
       offset: focus ? new Vector3(0, 30, 26).multiplyScalar(Math.min(fit, 1.6)) : new Vector3(0, 105, 80).multiplyScalar(fit),
@@ -193,6 +195,50 @@ function Water() {
   );
 }
 
+/** Lower Manhattan across the East River: Chinatown, the Lower East Side and the Financial District. */
+function Manhattan() {
+  const shape = useMemo(() => {
+    const pts: [number, number][] = [
+      [-4.8, -2], [-0.8, -2], [-0.6, -0.4], [-1.0, 0.9], [-1.5, 2.4], [-2.3, 3.9], [-3.1, 4.4], [-3.9, 3.6], [-4.5, 1.2],
+    ];
+    const s = new Shape();
+    pts.forEach(([x, y], i) => {
+      const w = toWorld(x, y);
+      if (i === 0) s.moveTo(w.x, -w.z);
+      else s.lineTo(w.x, -w.z);
+    });
+    return s;
+  }, []);
+  return (
+    <mesh rotation-x={-Math.PI / 2} position={[0, 0.07, 0]}>
+      <shapeGeometry args={[shape]} />
+      <meshStandardMaterial color={CITY.ground} />
+    </mesh>
+  );
+}
+
+/** A bridge you can walk across, drawn between the two neighborhoods it joins. */
+function MapBridge({ from, to }: { from: string; to: string }) {
+  const a = hoodCenter(from);
+  const b = hoodCenter(to);
+  const len = Math.hypot(b.x - a.x, b.z - a.z);
+  const rot = -Math.atan2(b.z - a.z, b.x - a.x);
+  return (
+    <group position={[(a.x + b.x) / 2, 0, (a.z + b.z) / 2]} rotation-y={rot}>
+      <mesh position={[0, 1.6, 0]}>
+        <boxGeometry args={[len - 18, 0.4, 1.4]} />
+        <meshStandardMaterial color="#8fa2b4" />
+      </mesh>
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[s * (len / 2 - 15), 3.2, 0]}>
+          <boxGeometry args={[0.8, 6.4, 1.8]} />
+          <meshStandardMaterial color="#6f8090" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function Park() {
   const c = hoodCenter("prospect-park");
   const trees = useMemo(() => {
@@ -239,7 +285,10 @@ function Park() {
 }
 
 const UNIT_BOX = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-const TALL: Record<string, number> = { williamsburg: 2.2, dumbo: 1.9, "bushwick-block": 1, "bed-stuy": 0.9, "crown-heights": 1, flatbush: 1.1 };
+const TALL: Record<string, number> = {
+  williamsburg: 2.2, dumbo: 1.9, "bushwick-block": 1, "bed-stuy": 0.9, "crown-heights": 1, flatbush: 1.1,
+  chinatown: 1.6, "lower-east-side": 1.5, "financial-district": 3.6,
+};
 
 /** Each neighborhood: a cluster of lit buildings (taller in Williamsburg and DUMBO) on its own pad. */
 function Districts({ places, onFocus }: { places: Place[]; onFocus: (id: string) => void }) {

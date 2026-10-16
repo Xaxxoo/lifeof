@@ -20,6 +20,7 @@ import {
   type Prop,
   type RoomDef,
   baseRoomId,
+  districtOf,
   placeAt,
 } from "@nyl/content";
 import {
@@ -45,6 +46,8 @@ import { useRealtimeChat, useRealtimeOccupants } from "@/lib/useRealtimeData";
 import type { BuildOp, CharacterDoc, CityStateDoc, HomeDoc, HuntDoc, HuntResultEvent, MessageDoc, Occupant, PlacedObjectDoc } from "@/lib/types";
 import { ActionMenu } from "./ActionMenu";
 import { Backdrop } from "./scene/Backdrop";
+import { BridgeScene } from "./scene/BridgeScene";
+import { ClubLights } from "./scene/ClubLights";
 import { cityUniforms, nightFactor, skyColor } from "./scene/palette";
 import { BuildPanel, type BuildTab, type Ghost } from "./BuildPanel";
 import { Hud } from "./Hud";
@@ -92,6 +95,11 @@ export function World({ roomId }: { roomId: string }) {
   const room = useMemo(() => (home ? homeRoomDef(roomId, home) : roomDef(roomId)!), [roomId, home]);
   const isHome = room.kind === "home";
   const indoor = isHome || room.kind === "venue";
+  // Each neighborhood has its own look; shops and venues take the look of the block outside.
+  const style = useMemo(
+    () => districtOf(room.kind === "street" || room.kind === "park" || room.kind === "bridge" ? baseRoomId(room.id) : room.exitTo?.roomId),
+    [room],
+  );
 
   const objectsFetcher = useCallback(() => api.objects(roomId), [roomId]);
   const rawObjects = usePolling(isHome ? objectsFetcher : null, 10000);
@@ -476,7 +484,7 @@ export function World({ roomId }: { roomId: string }) {
         />
         {indoor ? (
           <>
-            <ambientLight color={isHome ? "#ffeedd" : "#ffffff"} intensity={isHome ? 0.6 : 0.7} />
+            <ambientLight color={isHome ? "#ffeedd" : "#ffffff"} intensity={isHome ? 0.6 : room.club ? 0.25 : 0.7} />
             <hemisphereLight args={[isHome ? "#fff3e2" : "#bcd9ff", "#5a4636", 0.35 + light * 0.35]} />
           </>
         ) : (
@@ -519,11 +527,14 @@ export function World({ roomId }: { roomId: string }) {
           </>
         ) : room.kind === "park" ? (
           <ParkGround room={room} onTileClick={onTileClick} />
+        ) : room.kind === "bridge" ? (
+          <BridgeScene room={room} onTileClick={onTileClick} />
         ) : (
-          <Street room={room} onTileClick={onTileClick} />
+          <Street room={room} style={style} onTileClick={onTileClick} />
         )}
-        {!indoor && <Backdrop seed={room.id} width={room.width} depth={room.height} />}
-        {!isHome && <Props room={room} night={night} onPick={(p: Prop) => open(`prop:${p.id}`)} />}
+        {!indoor && room.kind !== "bridge" && <Backdrop seed={baseRoomId(room.id)} width={room.width} depth={room.height} style={style} />}
+        {room.club && <ClubLights room={room} />}
+        {!isHome && <Props room={room} night={night} style={style} onPick={(p: Prop) => open(`prop:${p.id}`)} />}
         {isHome && <Furniture objects={objects} onPick={onPickObject} highlight={ghost?.objectId ?? (buildMode ? selectedId : null)} />}
         {ghost && ITEM_BY_ID[ghost.itemId] && (
           <FurniturePiece item={ITEM_BY_ID[ghost.itemId]!} x={ghost.x} y={ghost.y} rot={ghost.rot} ghost valid={ghostValid} />
@@ -563,7 +574,7 @@ export function World({ roomId }: { roomId: string }) {
             .map((p) => {
               const isGig = gigStep?.target === `prop:${p.id}`;
               return (
-                <div key={p.id} ref={anchorRef(anchors, `prop:${p.id}`, () => propLabelPos(p))} className="absolute left-0 top-0 flex flex-col items-center gap-1">
+                <div key={p.id} ref={anchorRef(anchors, `prop:${p.id}`, () => propLabelPos(p, style))} className="absolute left-0 top-0 flex flex-col items-center gap-1">
                   {isGig && (
                     <div className="animate-bounce whitespace-nowrap rounded-full bg-[#f3a712] px-2 py-0.5 text-[11px] font-bold text-black shadow-lg">
                       📦 {gigStep!.label}

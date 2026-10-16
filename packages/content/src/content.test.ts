@@ -3,6 +3,8 @@ import { findPathToAny, footprintTiles, isWalkable } from "@nyl/game-core";
 import {
   ACTIONS,
   BASEMENT_STARTER,
+  CROSSINGS,
+  DISTRICTS,
   GIGS,
   HOME_TIERS,
   ITEM_BY_ID,
@@ -32,7 +34,7 @@ const homes = [
   ...HOME_TIERS.map((t) => homeRoomDef(`home:${t.id}`, { id: t.id, kind: "rental", defId: t.id, layout: t.layout })),
   ...LOTS.map((l) => homeRoomDef(`home:${l.id}`, { id: l.id, kind: "lot", defId: l.id, layout: emptyLotLayout(l) })),
 ];
-const all = [...STREETS, ...VENUES, ...SHOPS, ...homes];
+const all = [...STREETS, ...CROSSINGS, ...VENUES, ...SHOPS, ...homes];
 
 describe("rooms", () => {
   for (const room of all) {
@@ -88,6 +90,17 @@ describe("rooms", () => {
         }
       });
 
+      it("walks over to somewhere that walks back", () => {
+        for (const p of room.props) {
+          if (!p.walkTo) continue;
+          const to = ROOMS[p.walkTo.roomId];
+          expect(to, `${p.id} → ${p.walkTo.roomId}`).toBeDefined();
+          expect(isWalkable(buildRoomLayout(to!, []).grid, p.walkTo.at), `${p.id} lands on a blocked tile`).toBe(true);
+          expect(to!.props.some((q) => q.walkTo?.roomId === room.id), `${to!.id} has no way back to ${room.id}`).toBe(true);
+          expect(p.actions).toContain("walk_over");
+        }
+      });
+
       it("keeps NPCs in bounds", () => {
         for (const n of room.npcs ?? []) {
           for (const t of [{ x: n.x, y: n.y }, ...(n.patrol ?? [])]) {
@@ -97,6 +110,29 @@ describe("rooms", () => {
       });
     });
   }
+});
+
+describe("districts", () => {
+  it("give every block and crossing its own look", () => {
+    for (const r of [...STREETS, ...CROSSINGS]) expect(DISTRICTS[r.id], r.id).toBeDefined();
+  });
+
+  it("puts clubs behind a door with a cover", () => {
+    const clubs = VENUES.filter((v) => v.club);
+    expect(clubs.length).toBeGreaterThanOrEqual(2);
+    for (const c of clubs) {
+      expect(c.props.some((p) => p.actions?.includes("dance") && p.walkable), c.id).toBe(true);
+      expect(c.props.some((p) => p.actions?.includes("vip_table")), c.id).toBe(true);
+      expect(c.npcs?.some((n) => n.name === c.club!.bouncer), `${c.id} bouncer`).toBe(true);
+    }
+  });
+
+  it("walks from Brooklyn to Manhattan over the bridge", () => {
+    const dumbo = ROOMS["dumbo"]!.props.find((p) => p.walkTo)!;
+    expect(dumbo.walkTo!.roomId).toBe("manhattan-bridge");
+    const bridge = ROOMS["manhattan-bridge"]!;
+    expect(bridge.props.find((p) => p.walkTo?.roomId === "chinatown")).toBeDefined();
+  });
 });
 
 describe("subway", () => {

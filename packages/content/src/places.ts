@@ -84,6 +84,32 @@ export const PLACES: Place[] = [
   { id: "st-anns-warehouse", name: "St. Ann's Warehouse", category: "venue", roomId: "dumbo", target: "prop:st-anns", real: true, address: "45 Water St" },
   { id: "manhattan-bridge-view", name: "Manhattan Bridge view", category: "landmark", roomId: "dumbo", target: "prop:photo", real: true, address: "Washington St & Water St" },
 
+  // Manhattan Bridge
+  { id: "manhattan-bridge-walkway", name: "Manhattan Bridge walkway", category: "landmark", roomId: "manhattan-bridge", target: "prop:view", real: true },
+
+  // Chinatown · Canal St
+  { id: "chinatown-dumplings", name: "Dumpling House", category: "eatery", roomId: "chinatown", target: "prop:dumplings", real: false, services: ["order"] },
+  { id: "chinatown-bakery", name: "Golden Bakery", category: "eatery", roomId: "chinatown", target: "prop:bakery", real: false, services: ["order"] },
+  { id: "mahayana-temple", name: "Mahayana Buddhist Temple", category: "landmark", roomId: "chinatown", target: "prop:temple", real: true, address: "133 Canal St" },
+  { id: "chinatown-boba", name: "Bubble tea", category: "cafe", roomId: "chinatown", target: "prop:boba", real: false, services: ["order"] },
+  { id: "canal-st-stalls", name: "Canal St stalls", category: "shop", roomId: "chinatown", target: "prop:stalls", real: false },
+
+  // Lower East Side · Ludlow St
+  { id: "katzs", name: "Katz's Delicatessen", category: "eatery", roomId: "lower-east-side", target: "prop:katz", real: true, address: "205 E Houston St", services: ["order"] },
+  { id: "les-slice", name: "2 Bros Pizza", category: "eatery", roomId: "lower-east-side", target: "prop:slice", real: true, services: ["order"] },
+  { id: "neon-lotus", name: "Neon Lotus", category: "venue", roomId: "lower-east-side", target: "prop:club", real: false },
+  { id: "ludlow-tattoo", name: "Ludlow Tattoo", category: "shop", roomId: "lower-east-side", target: "prop:tattoo", real: false, services: ["book"] },
+  { id: "les-vintage", name: "Vintage store", category: "shop", roomId: "lower-east-side", target: "prop:vintage", real: false },
+  { id: "tenement-museum", name: "Tenement Museum", category: "landmark", roomId: "lower-east-side", target: "prop:museum", real: true, address: "103 Orchard St" },
+
+  // Financial District · Wall St
+  { id: "nyse", name: "New York Stock Exchange", category: "landmark", roomId: "financial-district", target: "prop:nyse", real: true, address: "11 Wall St" },
+  { id: "federal-hall", name: "Federal Hall", category: "landmark", roomId: "financial-district", target: "prop:federal-hall", real: true, address: "26 Wall St" },
+  { id: "trinity-church", name: "Trinity Church", category: "landmark", roomId: "financial-district", target: "prop:trinity", real: true, address: "89 Broadway" },
+  { id: "charging-bull", name: "Charging Bull", category: "landmark", roomId: "financial-district", target: "prop:bull", real: true, address: "Bowling Green" },
+  { id: "fidi-deli", name: "Corner deli", category: "eatery", roomId: "financial-district", target: "prop:deli", real: false, services: ["order"] },
+  { id: "stone-street-tavern", name: "Stone Street Tavern", category: "bar", roomId: "financial-district", target: "prop:tavern", real: false },
+
   // Prospect Park
   { id: "long-meadow", name: "Long Meadow", category: "park", roomId: "prospect-park", target: "prop:lawn", real: true },
   { id: "drummers-grove", name: "Drummer's Grove", category: "park", roomId: "prospect-park", target: "prop:drums", real: true },

@@ -7,6 +7,7 @@ import { poseAt, WALK_TILES_PER_SEC } from "@nyl/game-core";
 import type { Npc } from "@nyl/content";
 import { serverNow } from "@/lib/store";
 import { AvatarBody } from "./AvatarBody";
+import { BEAT_MS } from "./ClubLights";
 
 /** Patrolling NPCs loop their route on the shared clock, so every player sees them in the same place. */
 export function npcPosition(npc: Npc, now: number): { x: number; y: number; facing: number } {
@@ -30,9 +31,16 @@ export function npcPosition(npc: Npc, now: number): { x: number; y: number; faci
 
 export function NpcAvatar({ npc, onPick }: { npc: Npc; onPick?: () => void }) {
   const root = useRef<Group>(null);
+  const body = useRef<Group>(null);
   const patrols = !!npc.patrol?.length;
   const start = useMemo(() => ({ x: npc.x + 0.5, z: npc.y + 0.5 }), [npc]);
   useFrame(() => {
+    if (npc.dance && body.current) {
+      // Each dancer slightly off the beat from the next, like a real crowd.
+      const beat = serverNow() / BEAT_MS + (npc.x * 0.13 + npc.y * 0.07);
+      body.current.position.y = Math.abs(Math.sin(beat * Math.PI)) * 0.14;
+      body.current.rotation.y = Math.sin(beat * Math.PI * 0.5) * 0.6;
+    }
     if (!patrols || !root.current) return;
     const p = npcPosition(npc, serverNow());
     root.current.position.set(p.x + 0.5, 0, p.y + 0.5);
@@ -49,7 +57,9 @@ export function NpcAvatar({ npc, onPick }: { npc: Npc; onPick?: () => void }) {
         onPick();
       }}
     >
-      <AvatarBody look={npc.look} />
+      <group ref={body}>
+        <AvatarBody look={npc.look} />
+      </group>
     </group>
   );
 }

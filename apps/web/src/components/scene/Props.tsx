@@ -1,19 +1,20 @@
 "use client";
 
-import type { Prop, RoomDef } from "@nyl/content";
-import { useEffect, useMemo } from "react";
-import { BoxGeometry } from "three";
-import { CITY, buildingMaterial, tint } from "./palette";
+import type { DistrictStyle, Prop, RoomDef } from "@nyl/content";
+import { Building, buildingHeight } from "./Facades";
+import { CITY } from "./palette";
+import { ClubProp, DowntownProp } from "./PropsDowntown";
 import { SubwayEntrance } from "./SubwayEntrance";
 
-const UNIT_BOX = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 const GOODS = ["#e63946", "#f3a712", "#2a9d8f", "#457b9d", "#9b5de5", "#f4f1ea", "#3f7d3a", "#e76f51"];
 
 /** Where a prop's sign sits in the world, for the label layer. */
-export function propLabelPos(p: Prop): [number, number, number] {
+export function propLabelPos(p: Prop, style: DistrictStyle): [number, number, number] {
   const cx = p.x + p.w / 2;
-  // Above the roofline, clear of the people on the sidewalk.
-  if (p.kind === "building") return [cx, buildingHeight(p) + 0.5, p.y + p.h - 0.4];
+  // Above the roofline (or the shopfront of a tower), clear of the people on the sidewalk.
+  if (p.kind === "building") return [cx, Math.min(buildingHeight(p, style), 4.6) + 0.5, p.y + p.h - 0.4];
+  if (p.kind === "bridgegate" || p.kind === "bridgestairs") return [cx, 3.2, p.y + p.h / 2];
+  if (p.kind === "statue") return [cx, 2.2, p.y + p.h / 2];
   if (p.kind === "lawn" || p.kind === "dancefloor" || p.kind === "track" || p.kind === "drumcircle") return [cx, 0.6, p.y + p.h / 2];
   if (p.kind === "court") return [cx, 2.9, p.y + p.h / 2];
   if (p.kind === "counter" || p.kind === "djbooth") return [cx, 1.6, p.y + p.h / 2];
@@ -21,7 +22,7 @@ export function propLabelPos(p: Prop): [number, number, number] {
   return [cx, 1.9, p.y + p.h / 2];
 }
 
-export function Props({ room, night, onPick }: { room: RoomDef; night: boolean; onPick?: (p: Prop) => void }) {
+export function Props({ room, night, style, onPick }: { room: RoomDef; night: boolean; style: DistrictStyle; onPick?: (p: Prop) => void }) {
   return (
     <group>
       {room.props
@@ -35,7 +36,7 @@ export function Props({ room, night, onPick }: { room: RoomDef; night: boolean; 
               onPick(p);
             }}
           >
-            <PropMesh prop={p} night={night} />
+            <PropMesh prop={p} night={night} style={style} />
           </group>
         ))}
     </group>
@@ -43,13 +44,26 @@ export function Props({ room, night, onPick }: { room: RoomDef; night: boolean; 
 }
 
 
-function PropMesh({ prop: p, night }: { prop: Prop; night: boolean }) {
+function PropMesh({ prop: p, night, style }: { prop: Prop; night: boolean; style: DistrictStyle }) {
   const cx = p.x + p.w / 2;
   const cz = p.y + p.h / 2;
 
   switch (p.kind) {
     case "building":
-      return <Building prop={p} night={night} />;
+      return <Building prop={p} night={night} style={style} />;
+    case "statue":
+    case "bridgestairs":
+    case "bridgegate":
+    case "bridgetower":
+    case "rail":
+    case "newsstand":
+      return <DowntownProp prop={p} night={night} />;
+    case "vipbooth":
+    case "speaker":
+    case "photobooth":
+    case "restroom":
+    case "rope":
+      return <ClubProp prop={p} />;
     case "stoop":
       return (
         <group position={[cx, 0, p.y]}>
@@ -70,7 +84,7 @@ function PropMesh({ prop: p, night }: { prop: Prop; night: boolean }) {
           </mesh>
           <mesh position={[0, 1.55, 0]} castShadow>
             <sphereGeometry args={[0.62, 14, 10]} />
-            <meshStandardMaterial color={CITY.leaf[1]} roughness={0.85} />
+            <meshStandardMaterial color={style.palette.leaf[(p.x + p.y) % style.palette.leaf.length] ?? CITY.leaf[1]} roughness={0.85} />
           </mesh>
         </group>
       );
@@ -584,57 +598,4 @@ function Court({ prop: p, night }: { prop: Prop; night: boolean }) {
       ))}
     </group>
   );
-}
-
-/** A storefront on the block: a tinted, lit-window tower with an awning and a glowing shop window. */
-function Building({ prop: p, night }: { prop: Prop; night: boolean }) {
-  const cx = p.x + p.w / 2;
-  const cz = p.y + p.h / 2;
-  const height = buildingHeight(p);
-  const material = useMemo(() => buildingMaterial({ color: tint(p.color), base: 1.45 }), [p.color]);
-  useEffect(() => () => material.dispose(), [material]);
-  return (
-    <group position={[cx, 0, cz]}>
-      <mesh geometry={UNIT_BOX} material={material} scale={[p.w - 0.05, height, p.h]} castShadow receiveShadow />
-      {/* Storefront awning keeps a strip of the shop's own color */}
-      <mesh position={[0, 1.15, p.h / 2 + 0.2]} castShadow>
-        <boxGeometry args={[p.w - 0.4, 0.08, 0.5]} />
-        <meshStandardMaterial color={p.color ?? "#1d1f24"} />
-      </mesh>
-      {/* Shop window */}
-      <mesh position={[0, 0.6, p.h / 2 + 0.01]}>
-        <planeGeometry args={[p.w - 0.8, 0.8]} />
-        <meshStandardMaterial
-          color={night ? "#ffe2a8" : "#b9b2d6"}
-          emissive="#ffc46b"
-          emissiveIntensity={night ? 2.2 : 0.25}
-          toneMapped={false}
-        />
-      </mesh>
-      {/* Rooftop water tower on wide buildings */}
-      {p.w >= 4 && (
-        <group position={[p.w / 2 - 0.8, height, -0.3]}>
-          <mesh position={[0, 0.55, 0]} castShadow>
-            <cylinderGeometry args={[0.35, 0.35, 0.6, 10]} />
-            <meshStandardMaterial color="#6b4f4a" />
-          </mesh>
-          <mesh position={[0, 0.98, 0]}>
-            <coneGeometry args={[0.38, 0.3, 10]} />
-            <meshStandardMaterial color="#4a3a3e" />
-          </mesh>
-        </group>
-      )}
-    </group>
-  );
-}
-
-/** Each building gets its own steady height so the row has a skyline. */
-function buildingHeight(p: Prop) {
-  return 3.3 + (hash(p.id) % 5) * 0.3;
-}
-
-function hash(s: string) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
 }

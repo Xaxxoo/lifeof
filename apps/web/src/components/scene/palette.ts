@@ -34,9 +34,9 @@ export function skyColor(night: number): Color {
   return night > 0.5 ? SKY_DUSK.clone().lerp(SKY_NIGHT, (night - 0.5) * 2) : SKY_DAY.clone().lerp(SKY_DUSK, night * 2);
 }
 
-/** Pulls a brand color most of the way toward the dusk wall color, keeping a hint of it. */
-export function tint(color: string | undefined, amount = 0.55): string {
-  return `#${new Color(color ?? CITY.wall).lerp(new Color(CITY.wall), amount).getHexString()}`;
+/** Pulls a brand color most of the way toward the block's wall color, keeping a hint of it. */
+export function tint(color: string | undefined, amount = 0.55, toward: string = CITY.wall): string {
+  return `#${new Color(color ?? toward).lerp(new Color(toward), amount).getHexString()}`;
 }
 
 /** Shared so one update lights or dims every window in the city. */
@@ -47,11 +47,12 @@ export const cityUniforms: { uNight: IUniform<number> } = { uNight: { value: 0 }
  * into shape by its mesh or instance matrix). A share of windows glow, more of them at night.
  * `base` keeps the ground floor clear for storefronts.
  */
-export function buildingMaterial({ color = "#ffffff", base = 0.45 }: { color?: string; base?: number } = {}) {
-  const m = new MeshStandardMaterial({ color, roughness: 0.9 });
+export function buildingMaterial({ color = "#ffffff", base = 0.45, glass = 0 }: { color?: string; base?: number; glass?: number } = {}) {
+  const m = new MeshStandardMaterial({ color, roughness: glass ? 0.35 : 0.9, metalness: glass ? 0.25 : 0 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uNight = cityUniforms.uNight;
     shader.uniforms.uBase = { value: base };
+    shader.uniforms.uGlass = { value: glass };
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
@@ -79,6 +80,7 @@ vBSeed = bm[3].xz;`,
         `#include <common>
 uniform float uNight;
 uniform float uBase;
+uniform float uGlass;
 varying vec3 vBLocal;
 varying vec3 vBScale;
 varying vec3 vBNormal;
@@ -102,10 +104,13 @@ float bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453)
   float v = (h - uBase) / CH;
   float inside = side * step(0.0, u) * step(u, cols) * step(0.0, v) * step(v, rows);
   vec2 g = fract(vec2(u, v));
-  float pane = inside * step(0.22, g.x) * step(g.x, 0.78) * step(0.2, g.y) * step(g.y, 0.8);
+  // Glass towers are nearly all window: thin mullions instead of brick between panes.
+  float px = mix(0.22, 0.05, uGlass);
+  float py = mix(0.2, 0.08, uGlass);
+  float pane = inside * step(px, g.x) * step(g.x, 1.0 - px) * step(py, g.y) * step(g.y, 1.0 - py);
   float r = bHash(floor(vec2(u, v)) + vBSeed * 1.37 + vBNormal.xz * 17.0);
   float lit = step(1.0 - mix(0.2, 0.62, uNight), r);
-  vec3 glass = mix(vec3(0.5, 0.56, 0.74), vec3(0.1, 0.08, 0.18), uNight);
+  vec3 glass = mix(mix(vec3(0.5, 0.56, 0.74), vec3(0.55, 0.7, 0.86), uGlass), mix(vec3(0.1, 0.08, 0.18), vec3(0.08, 0.12, 0.22), uGlass), uNight);
   vec3 warm = mix(vec3(1.0, 0.76, 0.4), vec3(1.0, 0.92, 0.7), step(0.8, fract(r * 7.0)));
   diffuseColor.rgb = mix(diffuseColor.rgb, glass, pane);
   totalEmissiveRadiance += pane * lit * warm * mix(0.35, 2.6, uNight);

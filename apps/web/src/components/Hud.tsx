@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   activeMoodlets,
   activityProgress,
@@ -17,7 +17,7 @@ import { GIG_BY_ID, ROOMS } from "@nyl/content";
 import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { useGame } from "@/lib/store";
-import { useSocket } from "@/lib/SocketContext";
+import { useSocket, useSocketEvent } from "@/lib/SocketContext";
 import type { CharacterDoc, CityStateDoc, HuntDoc } from "@/lib/types";
 
 const NEED_LABEL: Record<NeedKey, string> = {
@@ -331,7 +331,17 @@ function Section({ title, source, children }: { title: string; source: "live" | 
 
 function ChatBar({ roomId }: { roomId: string }) {
   const [text, setText] = useState("");
+  const lastSent = useRef("");
+  const toast = useGame((s) => s.toast);
   const { socket, connected } = useSocket();
+  // Refused by moderation or rate limits: say why and give the text back to edit.
+  const rejected = (message: string) => {
+    toast(message, "error");
+    setText((t) => t || lastSent.current);
+  };
+  useSocketEvent<{ roomId: string; message: string }>("chat:rejected", (r) => {
+    if (r.roomId === roomId) rejected(r.message);
+  });
   return (
     <form
       className="flex min-w-0 flex-1 gap-2"
@@ -340,10 +350,11 @@ function ChatBar({ roomId }: { roomId: string }) {
         const body = text.trim();
         if (!body) return;
         setText("");
+        lastSent.current = body;
         if (connected) {
           socket.emit("chat:send", { roomId, body });
         } else {
-          void api.sendChat({ roomId, body }).catch(() => undefined);
+          void api.sendChat({ roomId, body }).catch((e) => rejected(playerMessage(e)));
         }
       }}
     >

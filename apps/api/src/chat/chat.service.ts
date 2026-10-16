@@ -20,10 +20,7 @@ export class ChatService {
     const text = body.trim().slice(0, MAX_LEN);
     if (!text) return null;
 
-    // Expanded regex filter
-    if (!this.moderation.localCheck(text)) {
-      throw new BadRequestException("That message can't be sent");
-    }
+    await this.moderation.screen(c, text, "room");
 
     const needsHold = this.moderation.needsHold(c);
     const msg = await this.messages.save({

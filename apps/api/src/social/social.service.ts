@@ -246,11 +246,17 @@ export class SocialService {
     if (actor.id === targetId) throw new BadRequestException("Can't report yourself");
     if (!REPORT_REASONS.includes(reason as any)) throw new BadRequestException("Invalid reason");
 
+    // One open report per reporter, target and message is enough for the queue.
+    const open = await this.reports.findOne({
+      where: { reporterId: actor.id, targetId, status: "pending", ...(messageId ? { messageId } : {}) },
+    });
+    if (open) return;
+
     await this.reports.save({
       reporterId: actor.id,
       targetId,
       reason,
-      detail: detail ?? null,
+      detail: detail ? detail.slice(0, 1000) : null,
       messageId: messageId ?? null,
     });
   }

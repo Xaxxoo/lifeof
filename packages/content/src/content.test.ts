@@ -15,6 +15,9 @@ import {
   STREETS,
   VENUES,
   baseRoomId,
+  instanceNumber,
+  instanceRoomId,
+  isInstanceable,
   buildRoomLayout,
   emptyLotLayout,
   goalTiles,
@@ -192,5 +195,39 @@ describe("hunts", () => {
 
   it("memo for the last finisher fits in 28 bytes", () => {
     for (const h of LAUNCH_HUNTS) expect(`hunt:${h.id}#${h.supply}`.length).toBeLessThanOrEqual(28);
+  });
+});
+
+describe("room instances", () => {
+  it("strips multi-digit instance numbers and works for shops", () => {
+    expect(baseRoomId("crown-heights:12")).toBe("crown-heights");
+    expect(baseRoomId("venue:warehouse:140")).toBe("venue:warehouse");
+    expect(baseRoomId("shop:crown-heights:patty:3")).toBe("shop:crown-heights:patty");
+  });
+
+  it("numbers instances from 1, which is the plain room id", () => {
+    expect(instanceRoomId("crown-heights", 1)).toBe("crown-heights");
+    expect(instanceRoomId("crown-heights", 7)).toBe("crown-heights:7");
+    expect(instanceNumber("crown-heights")).toBe(1);
+    expect(instanceNumber("crown-heights:7")).toBe(7);
+    expect(instanceNumber("shop:crown-heights:patty:3")).toBe(3);
+    for (const n of [1, 2, 25]) expect(instanceNumber(instanceRoomId("venue:warehouse", n))).toBe(n);
+  });
+
+  it("instances streets, parks, venues and shops but never homes or unknown rooms", () => {
+    expect(isInstanceable("crown-heights")).toBe(true);
+    expect(isInstanceable("crown-heights:4")).toBe(true);
+    expect(isInstanceable("prospect-park")).toBe(true);
+    expect(isInstanceable("venue:warehouse")).toBe(true);
+    expect(isInstanceable("shop:crown-heights:patty")).toBe(true);
+    expect(isInstanceable("home:abc123")).toBe(false);
+    expect(isInstanceable("work")).toBe(false);
+    expect(isInstanceable("transit")).toBe(false);
+    expect(isInstanceable("nowhere:2")).toBe(false);
+  });
+
+  it("gives an instance its base room's layout", () => {
+    expect(roomDef("crown-heights:3")).toBe(roomDef("crown-heights"));
+    expect(roomDef("venue:warehouse:2")?.id).toBe("venue:warehouse");
   });
 });

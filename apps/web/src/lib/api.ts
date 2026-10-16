@@ -131,6 +131,13 @@ export const api = {
   occupants: (roomId: string) => request<Occupant[]>("GET", `/world/occupants/${encodeURIComponent(roomId)}`),
   objects: (roomId: string) => request<PlacedObjectDoc[]>("GET", `/world/objects/${encodeURIComponent(roomId)}`),
   whereAmI: () => request<{ roomId: string }>("GET", "/world/where-am-i"),
+  instances: () =>
+    request<{
+      roomId: string;
+      instance: number;
+      capacity: number;
+      instances: { roomId: string; instance: number; count: number; friends: { characterId: string; name: string }[] }[];
+    }>("GET", "/world/instances"),
 
   // Play
   startActivity: (body: { target: string; actionId: string; dest?: string }) =>

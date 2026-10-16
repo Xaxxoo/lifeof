@@ -91,9 +91,22 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const info = this.characterBySocket.get(socket.id);
     if (!info) return;
 
+    // Only your own room (and so your own copy of a busy room): no listening in on other copies.
+    try {
+      const { roomId } = await this.world.whereAmI(info.token);
+      if (roomId !== data.roomId) return;
+    } catch {
+      return;
+    }
+
     // Leave all current rooms (except the socket's own room)
     for (const room of socket.rooms) {
-      if (room !== socket.id) socket.leave(room);
+      if (room !== socket.id && room !== data.roomId) {
+        socket.leave(room);
+        if (!this.otherSocketIn(info.characterId, room, socket.id)) {
+          this.server.to(room).emit("occupant:leave", { characterId: info.characterId });
+        }
+      }
     }
 
     socket.join(data.roomId);
@@ -221,6 +234,32 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     } catch (e) {
       socket.emit("error", { message: e instanceof Error ? e.message : "DM failed" });
     }
+  }
+
+  /** Move into the copy of this room where a friend or crewmate is. */
+  @SubscribeMessage("world:hop")
+  async handleWorldHop(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { friendId: string },
+  ) {
+    const info = this.characterBySocket.get(socket.id);
+    if (!info) return { ok: false };
+
+    try {
+      const r = await this.world.hop(info.token, data.friendId);
+      if (r.from !== r.to) this.handleRoomChange(r.characterId, r.from, r.to);
+      return { ok: true, roomId: r.to };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : "Couldn't join them" };
+    }
+  }
+
+  /** Whether this character has another socket (another tab) still in a room. */
+  private otherSocketIn(characterId: string, room: string, exceptSocketId: string): boolean {
+    for (const id of this.socketsByCharacter.get(characterId) ?? []) {
+      if (id !== exceptSocketId && this.server.sockets.sockets.get(id)?.rooms.has(room)) return true;
+    }
+    return false;
   }
 
   // --- Public methods for other services to call ---

@@ -1,4 +1,4 @@
-import { NEIGHBORHOOD_MAP, ROOMS } from "./rooms";
+import { NEIGHBORHOOD_MAP, ROOMS, baseRoomId } from "./rooms";
 
 /** Real OMNY base fare; check it against mta.info when it changes. */
 export const SUBWAY_FARE = 3;
@@ -15,6 +15,9 @@ export interface Route {
 
 /** Compressed ride time: a short base, plus distance on the map, plus a transfer if no line connects. */
 export function route(fromRoomId: string, toRoomId: string): Route | null {
+  // Riding from a busy block's copy (`crown-heights:3`) leaves from the same station.
+  fromRoomId = baseRoomId(fromRoomId);
+  toRoomId = baseRoomId(toRoomId);
   const a = ROOMS[fromRoomId]?.station;
   const b = ROOMS[toRoomId]?.station;
   const pa = NEIGHBORHOOD_MAP[fromRoomId];

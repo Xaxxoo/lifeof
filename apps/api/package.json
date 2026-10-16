@@ -7,7 +7,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node --import tsx dist/main",
     "migration:generate": "tsx ../../node_modules/typeorm/cli.js migration:generate -d src/config/data-source.ts src/migrations/migration",
     "migration:run": "tsx ../../node_modules/typeorm/cli.js migration:run -d src/config/data-source.ts",
     "migration:revert": "tsx ../../node_modules/typeorm/cli.js migration:revert -d src/config/data-source.ts"
@@ -37,7 +37,8 @@
     "socket.io": "^4.8.4",
     "typeorm": "^0.3.20",
     "bcryptjs": "^2.4.3",
-    "uuid": "^11.0.0"
+    "uuid": "^11.0.0",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -48,7 +49,6 @@
     "@types/node": "^22.20.5",
     "@types/passport-jwt": "^4.0.1",
     "@types/uuid": "^10.0.0",
-    "tsx": "^4.23.15",
     "typescript": "^5.7.0"
   }
 }

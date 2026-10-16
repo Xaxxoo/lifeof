@@ -1,3 +1,5 @@
+import type { SkillKey } from "@nyl/game-core";
+import type { Architecture } from "./districts";
 import type { Look } from "./traits";
 
 /**
@@ -9,7 +11,11 @@ export type PropKind =
   | "counter" | "stool" | "dancefloor" | "djbooth" | "table"
   | "lawn" | "grill" | "drumcircle" | "stall" | "track" | "photospot"
   | "shelf" | "longtable" | "salonchair" | "washer" | "bike" | "crate" | "artwall" | "bookshelf"
-  | "pew" | "altar" | "stage" | "lane" | "court";
+  | "pew" | "altar" | "stage" | "lane" | "court"
+  // Downtown and the bridge
+  | "statue" | "bridgestairs" | "bridgegate" | "bridgetower" | "rail" | "newsstand"
+  // Clubs
+  | "vipbooth" | "speaker" | "photobooth" | "restroom" | "rope";
 
 /** Tags let gigs pick sensible stops: pick up food at "food", drop off at "residential". */
 export type PropTag = "food" | "residential" | "outdoor" | "business" | "vendor";
@@ -41,6 +47,10 @@ export interface Prop {
   open?: OpenHours;
   /** One of a row (washers, bikes): usable, but only the first one gets a sign. */
   signless?: boolean;
+  /** Walk on to another block from here (over the Manhattan Bridge, say), arriving at `at`. */
+  walkTo?: { roomId: string; at: { x: number; y: number } };
+  /** This building is built differently from the rest of its block. */
+  arch?: Architecture;
 }
 
 export interface Npc {
@@ -57,6 +67,8 @@ export interface Npc {
   origin?: string;
   /** Loops this route forever instead of standing still. Ambient only. */
   patrol?: { x: number; y: number }[];
+  /** Dances on the spot (club crowds). */
+  dance?: boolean;
 }
 
 export interface RoomDef {
@@ -67,7 +79,7 @@ export interface RoomDef {
   height: number;
   spawn: { x: number; y: number };
   capacity: number;
-  kind: "street" | "park" | "home" | "venue";
+  kind: "street" | "park" | "home" | "venue" | "bridge";
   props: Prop[];
   npcs?: Npc[];
   /** Where you appear when arriving by train or coming out of your building. */
@@ -81,6 +93,21 @@ export interface RoomDef {
   theme?: { floor: string; floorAlt: string; wall: string; light: string };
   /** Homes: walls, floors and paint (see homes.ts). */
   home?: { kind: "rental" | "lot"; layout: import("./homes").HomeLayout };
+  /** Nightclubs: who gets past the door, and what it costs. */
+  club?: ClubRules;
+}
+
+export interface ClubRules {
+  /** Who works the door. */
+  bouncer: string;
+  /** Cover charge at the door. */
+  cover: number;
+  /** No cover if you get there before this hour (NYC time). */
+  freeBefore?: number;
+  /** Below this hygiene the bouncer turns you away. */
+  minHygiene: number;
+  /** At this skill level you're on the list: no cover, any time. */
+  guestList: { key: SkillKey; level: number };
 }
 
 // ── Looks for NPCs ──────────────────────────────────────────────────────────
@@ -104,9 +131,10 @@ interface BuildingSpec {
   open?: OpenHours;
   /** Gives the shop a walk-in interior where its actions happen. */
   inside?: ShopKind;
+  arch?: Architecture;
 }
 
-type ShopKind = "food" | "market" | "hall" | "barber" | "salon" | "laundry" | "gym" | "records" | "gallery" | "library" | "church" | "theater";
+type ShopKind = "food" | "market" | "hall" | "barber" | "salon" | "laundry" | "gym" | "records" | "gallery" | "library" | "church" | "theater" | "tattoo" | "temple";
 
 const SHOP_THEME: Record<ShopKind, NonNullable<RoomDef["theme"]>> = {
   food: { floor: "#c9a27a", floorAlt: "#c09a72", wall: "#f2e6d0", light: "#ffcf7a" },
@@ -121,6 +149,8 @@ const SHOP_THEME: Record<ShopKind, NonNullable<RoomDef["theme"]>> = {
   library: { floor: "#8a6a48", floorAlt: "#826443", wall: "#e9dcc4", light: "#ffe2a8" },
   church: { floor: "#7d2e2e", floorAlt: "#b8a888", wall: "#efe8dc", light: "#ffd9a0" },
   theater: { floor: "#5a1a22", floorAlt: "#521820", wall: "#2a1a24", light: "#ffc46b" },
+  tattoo: { floor: "#1e1e24", floorAlt: "#2a2a30", wall: "#3a1e2e", light: "#ff4fa0" },
+  temple: { floor: "#8a2a22", floorAlt: "#7e261f", wall: "#f2d48a", light: "#ffcf7a" },
 };
 
 /**
@@ -171,6 +201,11 @@ function shopInterior(streetId: string, b: BuildingSpec, front: { x: number; y: 
       { id: "altar", kind: "altar", x: 3, y: 0, w: 3, h: 1 },
       ...row("pew", "pew", "Pews", [[2, 2], [5, 2], [2, 4], [5, 4]], acts, 2).map((p) => ({ ...p, color: "#6b4a2e" })),
     ],
+    tattoo: [...row("chair", "salonchair", "Tattoo chair", [[2, 1], [5, 1]], acts), { id: "art", kind: "artwall", x: 2, y: 0, w: 2, h: 1 }, ...lounge([[3, 5], [5, 5]])],
+    temple: [
+      { id: "altar", kind: "altar", x: 3, y: 0, w: 3, h: 1, label: "Altar", actions: acts },
+      ...row("pew", "pew", "Cushions", [[2, 3], [5, 3]], ["lounge"], 2).map((p) => ({ ...p, color: "#c9a227" })),
+    ],
     theater: [
       { id: "stage", kind: "stage", x: 1, y: 0, w: 6, h: 2 },
       ...row("seats", "pew", "Seats", [[2, 3], [5, 3], [2, 5], [5, 5]], acts, 2).map((p) => ({ ...p, color: "#a3212f" })),
@@ -214,7 +249,7 @@ function street(spec: {
 }): RoomDef {
   let x = 0;
   const props: Prop[] = spec.buildings.map((b) => {
-    const p: Prop = { id: b.id, kind: "building", x, y: 0, w: b.w, h: 3, label: b.label, color: b.color, actions: b.actions, enter: b.enter, tags: b.tags, open: b.open };
+    const p: Prop = { id: b.id, kind: "building", x, y: 0, w: b.w, h: 3, label: b.label, color: b.color, actions: b.actions, enter: b.enter, tags: b.tags, open: b.open, arch: b.arch };
     if (b.inside) {
       const shop = shopInterior(spec.id, b, { x: x + Math.floor(b.w / 2), y: 3 });
       SHOPS.push({ ...shop, neighborhood: spec.neighborhood });
@@ -423,6 +458,8 @@ export const DUMBO = street({
   ],
   extras: [
     { id: "photo", kind: "photospot", x: 6, y: 6, w: 1, h: 1, label: "Manhattan Bridge view", actions: ["photo"], tags: ["outdoor"] },
+    { id: "bridge", kind: "bridgestairs", x: 1, y: 13, w: 2, h: 2, label: "Manhattan Bridge walkway", actions: ["walk_over"], tags: ["outdoor"],
+      walkTo: { roomId: "manhattan-bridge", at: { x: 31, y: 5 } } },
     tree("tree-1", 2, 5),
     bench("bench", 10, 5),
     lamp("lamp-1", 14, 6),
@@ -471,6 +508,140 @@ export const PROSPECT_PARK: RoomDef = {
   ],
 };
 
+
+// ── Downtown Manhattan, over the bridge ────────────────────────────────────
+export const CHINATOWN = street({
+  id: "chinatown",
+  name: "Canal St",
+  neighborhood: "Chinatown",
+  station: { name: "Canal St", lines: ["N", "Q", "J", "6"] },
+  buildings: [
+    { id: "walkup", label: "Tenement walk-up", w: 3, color: "#8a4a3e", actions: ["go_home"], tags: ["residential"] },
+    { id: "dumplings", label: "Dumpling House", w: 4, color: "#c0392b", actions: ["dumplings"], tags: ["food"], inside: "food" },
+    { id: "bakery", label: "Golden Bakery", w: 3, color: "#e9b44c", actions: ["egg_tart"], tags: ["food"], inside: "food" },
+    { id: "temple", label: "Mahayana Buddhist Temple", w: 5, color: "#c9a227", actions: ["temple_visit"], tags: ["business"], inside: "temple" },
+    { id: "boba", label: "Bubble tea", w: 3, color: "#7ec4a4", actions: ["boba"], tags: ["food"], inside: "food" },
+    { id: "market", label: "Fruit & fish market", w: 4, color: "#3d6b8f", actions: ["produce"], tags: ["food", "business"], inside: "market" },
+  ],
+  extras: [
+    { id: "bridge", kind: "bridgegate", x: 0, y: 13, w: 2, h: 2, label: "Manhattan Bridge walkway", actions: ["walk_over"], tags: ["outdoor"],
+      walkTo: { roomId: "manhattan-bridge", at: { x: 2, y: 5 } } },
+    { id: "stalls", kind: "stall", x: 6, y: 6, w: 3, h: 1, label: "Canal St stalls", actions: ["haggle"], tags: ["vendor", "business"] },
+    { id: "xiangqi", kind: "table", x: 12, y: 6, w: 1, h: 1, label: "Xiangqi game", actions: ["xiangqi"], tags: ["outdoor"] },
+    { id: "cart", kind: "cart", x: 16, y: 7, w: 1, h: 1, label: "Mango cart", actions: ["fruit"], tags: ["food", "vendor"] },
+    { id: "newsstand", kind: "newsstand", x: 19, y: 5, w: 1, h: 1, label: "Newsstand", actions: ["snacks"], tags: ["vendor"] },
+    tree("tree-1", 4, 4),
+    lamp("lamp-1", 9, 7),
+    lamp("lamp-2", 20, 4),
+    { id: "hydrant", kind: "hydrant", x: 14, y: 4, w: 1, h: 1 },
+  ],
+  npcs: [
+    { id: "mei", name: "Auntie Mei", role: "Folds dumplings since 5 AM", look: look("#e8c39e", "bun", "#c0392b", "#26324a", "#2a2a2a"),
+      x: 5, y: 4, facing: 0, lines: ["Five for three dollars. Don't tell the hipsters.", "You too skinny. Take extra.", "My grandson is a dentist in New Jersey. Very proud."] },
+    { id: "kenny", name: "Kenny", role: "Sells 'designer' bags", look: look("#d9a47f", "fade", "#111111"),
+      x: 9, y: 6, facing: Math.PI / 2, lines: ["Gucci, Prada, Louis. All real. Very real.", "For you, special price. Don't tell nobody.", "Cops coming? No, no, we good."] },
+    { id: "wen", name: "Uncle Wen", role: "Undefeated at xiangqi", look: look("#e2b48c", "bald", "#5a6a7a", "#3a3a3a", "#8f8f8f"),
+      x: 13, y: 6, facing: -Math.PI / 2, lines: ["Sit. I go easy on you. A little.", "Forty years on this table. Never lost to a tourist.", "Your general is naked. Ha!"] },
+  ],
+});
+
+export const LOWER_EAST_SIDE = street({
+  id: "lower-east-side",
+  name: "Ludlow St",
+  neighborhood: "Lower East Side",
+  station: { name: "Delancey St–Essex St", lines: ["F", "J", "M", "Z"] },
+  buildings: [
+    { id: "katz", label: "Katz's Delicatessen", w: 5, color: "#c0392b", actions: ["pastrami"], tags: ["food"], inside: "food" },
+    { id: "slice", label: "2 Bros Pizza", w: 3, color: "#f3a712", actions: ["dollar_slice"], tags: ["food"], inside: "food" },
+    { id: "club", label: "Neon Lotus (10 PM–4 AM)", w: 5, color: "#ff3fa4", actions: ["enter_venue"], enter: "venue:neon-lotus", tags: ["business"], arch: "warehouse" },
+    { id: "tattoo", label: "Ludlow Tattoo", w: 3, color: "#3a1e2e", actions: ["tattoo"], tags: ["business"], inside: "tattoo" },
+    { id: "vintage", label: "Vintage store", w: 4, color: "#9b5de5", actions: ["thrift"], tags: ["business"], inside: "market" },
+    { id: "museum", label: "Tenement Museum", w: 4, color: "#8a5a3a", actions: ["museum_tour"], tags: ["business"], inside: "gallery" },
+  ],
+  extras: [
+    { id: "cart", kind: "cart", x: 3, y: 7, w: 1, h: 1, label: "Pretzel cart", actions: ["snacks"], tags: ["food", "vendor"] },
+    bench("bench", 16, 5),
+    lamp("lamp-1", 7, 6),
+    lamp("lamp-2", 20, 6),
+    { id: "hydrant", kind: "hydrant", x: 14, y: 4, w: 1, h: 1 },
+  ],
+  npcs: [
+    { id: "goldberg", name: "Mr. Goldberg", role: "Eating at Katz's since 1961", look: look("#f0cfb4", "bald", "#3a4a6a", "#2a2a2a", "#bdbdbd"),
+      x: 2, y: 4, facing: 0, lines: ["Hold on to your ticket. Lose it and they charge you fifty dollars.", "Tip the cutter, you get a taste.", "My grandmother came through here from Minsk with one suitcase."] },
+    { id: "sasha", name: "Sasha", role: "Nightlife promoter", look: look("#c68863", "long", "#111111", "#1b1b1b", "#1a1410"),
+      x: 12, y: 4, facing: 0, lines: ["You on the list? I can put you on the list.", "Doors at ten, it's dead till midnight, it's insane by one.", "Big Mike doesn't care who you know. Shower first."] },
+  ],
+});
+
+export const FINANCIAL_DISTRICT = street({
+  id: "financial-district",
+  name: "Wall St",
+  neighborhood: "Financial District",
+  station: { name: "Wall St", lines: ["2", "3", "4", "5"] },
+  buildings: [
+    { id: "nyse", label: "New York Stock Exchange", w: 6, color: "#d8d0c0", actions: ["watch_ticker"], tags: ["business"] },
+    { id: "federal-hall", label: "Federal Hall", w: 5, color: "#c8c0b0", actions: ["people_watch"], tags: ["business"] },
+    { id: "trinity", label: "Trinity Church", w: 4, color: "#5a4a3e", actions: ["church_service"], tags: ["business"], inside: "church", arch: "brownstone" },
+    { id: "deli", label: "Corner deli", w: 3, color: "#2a9d8f", actions: ["salad"], tags: ["food"], inside: "food", arch: "tenement" },
+    { id: "tower", label: "Office tower lobby", w: 4, color: "#5a6a80", actions: ["network"], tags: ["business"], arch: "glass" },
+    { id: "tavern", label: "Stone Street Tavern (4 PM–1 AM)", w: 4, color: "#7a3a2a", actions: ["enter_venue"], enter: "venue:stonestreet", tags: ["food", "business"], arch: "brownstone" },
+  ],
+  extras: [
+    { id: "bull", kind: "statue", x: 3, y: 5, w: 2, h: 1, label: "Charging Bull", actions: ["bull_photo"], tags: ["outdoor"] },
+    { id: "truck", kind: "cart", x: 12, y: 7, w: 1, h: 1, label: "Halal truck", actions: ["halal"], tags: ["food", "vendor"] },
+    { id: "coffee", kind: "cart", x: 20, y: 7, w: 1, h: 1, label: "Coffee cart", actions: ["bodega_coffee"], tags: ["food", "vendor"] },
+    lamp("lamp-1", 8, 6),
+    lamp("lamp-2", 17, 6),
+    { id: "hydrant", kind: "hydrant", x: 23, y: 4, w: 1, h: 1 },
+  ],
+  npcs: [
+    { id: "chad", name: "Chad", role: "Second-year analyst", look: look("#f0cfb4", "fade", "#bcd4ee", "#26324a", "#8a6a3a"),
+      x: 8, y: 4, facing: 0, lines: ["I haven't seen the sun since March.", "We're not a bank, we're a family. A family that fires people.", "Bottle service at Neon Lotus tonight. Expensing it."] },
+    { id: "priya", name: "Priya", role: "Quant, ex-Dhaka", origin: "dhaka", look: look("#9a5d3d", "long", "#29335c", "#1b1b1b", "#1a1410"),
+      x: 18, y: 4, facing: 0, lines: ["I wrote the algorithm Chad takes credit for.", "Rub the bull if you want. The market doesn't care.", "Biryani on Coney Island Ave beats any steakhouse here."] },
+  ],
+});
+
+/**
+ * The Manhattan Bridge walkway, Brooklyn to Chinatown on foot. Trains rumble past on the far side of the
+ * fence, the river is a long way down, and the skyline is right there.
+ */
+export const MANHATTAN_BRIDGE: RoomDef = {
+  id: "manhattan-bridge",
+  name: "Manhattan Bridge",
+  neighborhood: "East River",
+  width: 34,
+  height: 9,
+  spawn: { x: 31, y: 5 },
+  capacity: 30,
+  kind: "bridge",
+  exitTo: { roomId: "dumbo", at: { x: 3, y: 13 } },
+  props: [
+    { id: "rail-n", kind: "rail", x: 0, y: 2, w: 34, h: 1 },
+    { id: "rail-s", kind: "rail", x: 0, y: 8, w: 34, h: 1 },
+    { id: "tower-mn", kind: "bridgetower", x: 8, y: 0, w: 2, h: 2 },
+    { id: "tower-bk", kind: "bridgetower", x: 24, y: 0, w: 2, h: 2 },
+    { id: "to-chinatown", kind: "bridgegate", x: 0, y: 3, w: 1, h: 5, label: "Chinatown · Canal St", actions: ["walk_over"],
+      walkTo: { roomId: "chinatown", at: { x: 2, y: 13 } } },
+    { id: "to-dumbo", kind: "bridgegate", x: 33, y: 3, w: 1, h: 5, label: "DUMBO · Washington St", actions: ["walk_over"],
+      walkTo: { roomId: "dumbo", at: { x: 3, y: 13 } } },
+    { id: "view", kind: "photospot", x: 16, y: 7, w: 2, h: 1, label: "Skyline view", actions: ["bridge_photo"], tags: ["outdoor"] },
+    lamp("lamp-1", 5, 7),
+    lamp("lamp-2", 11, 7),
+    lamp("lamp-3", 21, 7),
+    lamp("lamp-4", 28, 7),
+  ],
+  npcs: [
+    { id: "leon", name: "Leon", role: "Plays sax for the trains", look: look("#4d2c1a", "fade", "#e0a526", "#26324a", "#1a1410"),
+      x: 13, y: 3, facing: 0, lines: ["The Q goes by every few minutes. I play in the gaps.", "Best acoustics in New York. Ask anybody.", "Drop a dollar, I'll play you Coltrane."] },
+    { id: "mira", name: "Mira", role: "Shoots weddings up here", look: look("#d9a47f", "long", "#f4f1ea", "#26324a", "#5a3a2a"),
+      x: 19, y: 7, facing: Math.PI, lines: ["Golden hour is in twenty minutes. Don't move.", "The Empire State fits right between the cables if you stand here.", "Three proposals this week. Two said yes."] },
+    { id: "rider", name: "Cyclist", role: "Late for something", look: look("#eac0a2", "fade", "#2a9d8f", "#1b1b1b", "#a8732f"),
+      x: 1, y: 4, facing: Math.PI / 2, lines: ["On your left!"],
+      patrol: [{ x: 1, y: 4 }, { x: 32, y: 4 }, { x: 32, y: 6 }, { x: 1, y: 6 }] },
+  ],
+};
+
 // ── Venue interiors ─────────────────────────────────────────────────────────
 function bar(spec: {
   id: string;
@@ -508,19 +679,77 @@ function bar(spec: {
   };
 }
 
+
+/**
+ * A nightclub: a bouncer on the door, a bar, a big lit dance floor in front of the DJ, a roped-off VIP
+ * booth, a photo booth and the bathroom line. The floor gets better the more people are dancing on it.
+ */
+function club(spec: {
+  id: string;
+  name: string;
+  neighborhood: string;
+  exitTo: RoomDef["exitTo"];
+  open: OpenHours;
+  theme: RoomDef["theme"];
+  rules: ClubRules;
+  bouncer: Npc;
+  npcs: Npc[];
+}): RoomDef {
+  return {
+    id: spec.id,
+    name: spec.name,
+    neighborhood: spec.neighborhood,
+    width: 14,
+    height: 11,
+    spawn: { x: 1, y: 9 },
+    capacity: 40,
+    kind: "venue",
+    open: spec.open,
+    exitTo: spec.exitTo,
+    theme: spec.theme,
+    club: spec.rules,
+    npcs: [spec.bouncer, ...spec.npcs],
+    props: [
+      { id: "door", kind: "door", x: 0, y: 9, w: 1, h: 1, label: "Door", actions: ["go_out"] },
+      { id: "counter", kind: "counter", x: 1, y: 0, w: 5, h: 1, label: "Bar", actions: ["order_drink", "shots", "order_water"] },
+      { id: "stool-1", kind: "stool", x: 1, y: 2, w: 1, h: 1, actions: ["lounge"] },
+      { id: "stool-2", kind: "stool", x: 3, y: 2, w: 1, h: 1, actions: ["lounge"] },
+      { id: "stool-3", kind: "stool", x: 5, y: 2, w: 1, h: 1, actions: ["lounge"] },
+      { id: "speaker-1", kind: "speaker", x: 8, y: 0, w: 1, h: 1 },
+      { id: "dj", kind: "djbooth", x: 9, y: 0, w: 4, h: 1, label: "DJ booth", actions: ["dj_set"] },
+      { id: "speaker-2", kind: "speaker", x: 13, y: 0, w: 1, h: 1 },
+      { id: "dancefloor", kind: "dancefloor", x: 5, y: 3, w: 8, h: 5, label: "Dance floor", actions: ["dance"], walkable: true },
+      { id: "vip", kind: "vipbooth", x: 1, y: 4, w: 2, h: 3, label: "VIP booth", actions: ["vip_table"] },
+      { id: "rope", kind: "rope", x: 3, y: 4, w: 1, h: 2 },
+      { id: "restroom", kind: "restroom", x: 13, y: 5, w: 1, h: 2, label: "Bathroom", actions: ["club_bathroom"] },
+      { id: "photobooth", kind: "photobooth", x: 12, y: 9, w: 1, h: 1, label: "Photo booth", actions: ["photo_booth"] },
+      { id: "seat-1", kind: "stool", x: 4, y: 9, w: 1, h: 1, actions: ["lounge"] },
+      { id: "seat-2", kind: "stool", x: 6, y: 9, w: 1, h: 1, actions: ["lounge"] },
+    ],
+  };
+}
+
+/** Club crowds dance on these tiles, leaving room for players. */
+const dancer = (id: string, name: string, x: number, y: number, l: Look, lines: string[]): Npc => ({
+  id, name, role: "On the dance floor", look: l, x, y, facing: (x + y) % 4, lines, dance: true,
+});
+
 export const VENUES: RoomDef[] = [
-  bar({
+  club({
     id: "venue:warehouse",
     name: "House of Yes",
     neighborhood: "Bushwick",
     exitTo: { roomId: BUSHWICK.id, at: { x: 6, y: 3 } },
     open: { open: 21, close: 4 },
     theme: { floor: "#2b2b2f", floorAlt: "#26262a", wall: "#3a3a40", light: "#b84dff" },
+    rules: { bouncer: "Rosa", cover: 25, freeBefore: 22, minHygiene: 35, guestList: { key: "creativity", level: 5 } },
+    bouncer: { id: "rosa", name: "Rosa", role: "Works the door", look: look("#b0714d", "bun", "#111111", "#1b1b1b"), x: 1, y: 8, facing: Math.PI / 2,
+      lines: ["Costumes encouraged. Attitude is not.", "Consent is the dress code, honey.", "Artists get in free. Show me your portfolio."] },
     npcs: [
-      { id: "dj-nova", name: "DJ Nova", role: "Resident DJ", look: look("#b0714d", "afro", "#111111"), x: 8, y: 1, facing: 0,
+      { id: "dj-nova", name: "DJ Nova", role: "Resident DJ", look: look("#b0714d", "afro", "#111111"), x: 11, y: 1, facing: 0,
         lines: ["This next one's for the people who came here alone.", "Hands up if your rent went up this year."] },
-      { id: "marco", name: "Marco", role: "Regular", look: look("#d9a47f", "bun", "#e4572e"), x: 7, y: 5, facing: Math.PI,
-        lines: ["I told my boss I'm sick tomorrow. Preemptively.", "Came for the circus act, stayed till 4."] },
+      dancer("marco", "Marco", 7, 4, look("#d9a47f", "bun", "#e4572e"), ["I told my boss I'm sick tomorrow. Preemptively.", "Came for the circus act, stayed till 4."]),
+      dancer("aerial", "Skye", 11, 6, look("#f6d7c3", "long", "#ff4fa0", "#1b1b1b", "#c77dff"), ["I was upside down on a hoop ten minutes ago.", "Glitter is a lifestyle."]),
     ],
   }),
   bar({
@@ -576,6 +805,36 @@ export const VENUES: RoomDef[] = [
         lines: ["Band's on at ten. Strike before then.", "The fried chicken here is a whole reason to come."] },
     ],
   }),
+  club({
+    id: "venue:neon-lotus",
+    name: "Neon Lotus",
+    neighborhood: "Lower East Side",
+    exitTo: { roomId: "lower-east-side", at: { x: 10, y: 3 } },
+    open: { open: 22, close: 4 },
+    theme: { floor: "#14101e", floorAlt: "#1a1426", wall: "#120c1c", light: "#ff3fa4" },
+    rules: { bouncer: "Big Mike", cover: 30, freeBefore: 23, minHygiene: 40, guestList: { key: "charisma", level: 5 } },
+    bouncer: { id: "big-mike", name: "Big Mike", role: "Bouncer", look: look("#3e2416", "bald", "#111111", "#111111"), x: 1, y: 8, facing: Math.PI / 2,
+      lines: ["ID. And smile, it's a party.", "I don't care who you know. I care if you showered.", "Be nice to the bartenders and I'll be nice to you."] },
+    npcs: [
+      { id: "dj-koji", name: "DJ Koji", role: "Headliner", look: look("#e2b48c", "fade", "#ff3fa4", "#111111", "#111111"), x: 11, y: 1, facing: 0,
+        lines: ["Amapiano into techno. Trust the process.", "If the floor's full at two, I'm doing my job."] },
+      dancer("zara", "Zara", 6, 5, look("#4d2c1a", "braids", "#f3a712"), ["This DJ is unreal.", "My feet hurt. I'm not leaving."]),
+      dancer("theo", "Theo", 9, 4, look("#eac0a2", "waves", "#3a86ff"), ["First time in New York? Welcome to the best night of your life.", "Water. Then dance. Then water."]),
+      dancer("ines", "Inés", 12, 6, look("#c68863", "long", "#9b5de5", "#1b1b1b", "#3b2416"), ["Who's playing next week? I need to know.", "Bachata at three. You'll see."]),
+    ],
+  }),
+  bar({
+    id: "venue:stonestreet",
+    name: "Stone Street Tavern",
+    neighborhood: "Financial District",
+    exitTo: { roomId: "financial-district", at: { x: 24, y: 3 } },
+    open: { open: 16, close: 1 },
+    theme: { floor: "#5a3a26", floorAlt: "#523522", wall: "#2a3a2e", light: "#ffcf7a" },
+    npcs: [
+      { id: "suits", name: "Brendan", role: "Closed a deal today", look: look("#f0cfb4", "fade", "#3a4a6a", "#26324a", "#6a4a2a"), x: 3, y: 3, facing: Math.PI,
+        lines: ["Next round's on the firm.", "Cobblestones and martinis. That's Stone Street."] },
+    ],
+  }),
   {
     id: "venue:cafe",
     name: "Devoción",
@@ -620,9 +879,15 @@ export const BASEMENT_ROOM: RoomDef = {
 };
 
 // ── Registry ────────────────────────────────────────────────────────────────
-export const STREETS: RoomDef[] = [CROWN_HEIGHTS, BUSHWICK, BED_STUY, FLATBUSH, WILLIAMSBURG, DUMBO, PROSPECT_PARK];
+export const STREETS: RoomDef[] = [
+  CROWN_HEIGHTS, BUSHWICK, BED_STUY, FLATBUSH, WILLIAMSBURG, DUMBO, PROSPECT_PARK,
+  CHINATOWN, LOWER_EAST_SIDE, FINANCIAL_DISTRICT,
+];
 
-export const ROOMS: Record<string, RoomDef> = Object.fromEntries([...STREETS, ...VENUES, ...SHOPS].map((r) => [r.id, r]));
+/** Places you get to on foot, not by train. */
+export const CROSSINGS: RoomDef[] = [MANHATTAN_BRIDGE];
+
+export const ROOMS: Record<string, RoomDef> = Object.fromEntries([...STREETS, ...CROSSINGS, ...VENUES, ...SHOPS].map((r) => [r.id, r]));
 
 /** New arrivals start on the block where their room is. */
 export const STREET_ID = CROWN_HEIGHTS.id;
@@ -659,8 +924,11 @@ export function instanceNumber(roomId: string): number {
 /** The room id for copy `n` of a base room. */
 export const instanceRoomId = (base: string, n: number) => (n <= 1 ? base : `${base}:${n}`);
 
-/** Map positions for the phone's Brooklyn map (rough geography, not to scale). */
+/** Map positions for the phone's map (rough geography, not to scale). Manhattan is west across the river. */
 export const NEIGHBORHOOD_MAP: Record<string, { x: number; y: number }> = {
+  "lower-east-side": { x: -1.6, y: 0.6 },
+  chinatown: { x: -2.2, y: 1.9 },
+  "financial-district": { x: -2.8, y: 3.4 },
   dumbo: { x: 0.6, y: 2.4 },
   williamsburg: { x: 2.6, y: 0.8 },
   "bushwick-block": { x: 5.2, y: 1.6 },

@@ -35,6 +35,7 @@ import {
   roomDef,
   route,
   type OpenHours,
+  type RoomDef,
   baseRoomId,
 } from "@nyl/content";
 import { Character } from "../entities/character.entity";
@@ -65,6 +66,32 @@ function openNow(open: OpenHours | undefined, now: number) {
 function hoursText(open: OpenHours) {
   const h = (n: number) => (n === 0 ? "midnight" : n === 12 ? "noon" : n < 12 ? `${n} AM` : `${n - 12} PM`);
   return `Open ${h(open.open)}–${h(open.close)}`;
+}
+
+/** Dancing pays more fun the fuller the floor: +15% per dancer, up to almost double. */
+const CROWD_BONUS_PER_DANCER = 0.15;
+const CROWD_BONUS_CAP = 0.9;
+/** A player on the decks lifts the whole floor. */
+const LIVE_DJ_BONUS = 0.2;
+/** Clubs peak between 11 PM and 3 AM. */
+const PEAK_BONUS = 0.25;
+/** A DJ's tips: this much per dancer on the floor when the set ends, capped. */
+const DJ_TIP_PER_DANCER = 4;
+const DJ_TIP_CAP = 60;
+
+function peakHour(hour: number) {
+  return hour >= 23 || hour < 3;
+}
+
+/** Who gets past the club door, and what it costs them. Throws the bouncer's line if they don't. */
+export function clubDoor(club: NonNullable<RoomDef["club"]>, open: OpenHours | undefined, c: Pick<Character, "skills">, hygiene: number, hour: number) {
+  if (hygiene < club.minHygiene) {
+    throw new BadRequestException(`${club.bouncer} looks you up and down: "Not tonight. Go home and shower."`);
+  }
+  if (skillLevel(c.skills[club.guestList.key]) >= club.guestList.level) return { cover: 0, note: "You're on the list" };
+  const early = club.freeBefore !== undefined && open && (open.open <= club.freeBefore ? hour >= open.open && hour < club.freeBefore : hour < club.freeBefore);
+  if (early) return { cover: 0, note: "Free before " + (club.freeBefore! > 12 ? `${club.freeBefore! - 12} PM` : `${club.freeBefore} AM`) };
+  return { cover: club.cover, note: `Cover $${club.cover}` };
 }
 
 function hash(s: string) {
@@ -158,14 +185,23 @@ export class PlayService {
     let rideMoment: string | undefined;
     let rideLines: string[] | undefined;
     let cost = action.cost ?? 0;
+    let costLabel = action.label;
 
     if (action.kind === "travel") {
       if (actionId === "go_home") travelTo = homeRoom((await this.world.residence(c)).id);
       else if (actionId === "go_out") travelTo = room.exitTo?.roomId;
       else if (actionId === "enter_venue") travelTo = room.props.find((x) => `prop:${x.id}` === target)?.enter;
+      else if (actionId === "walk_over") travelTo = room.props.find((x) => `prop:${x.id}` === target)?.walkTo?.roomId;
       const to = travelTo ? await this.world.roomFor(travelTo) : null;
       if (!to || !travelTo) throw new BadRequestException("Can't go that way");
       if (to.open && !openNow(to.open, now)) throw new BadRequestException(`${to.name} is closed. ${hoursText(to.open)}`);
+      if (actionId === "enter_venue" && to.club) {
+        const hygiene = this.world.currentNeeds(c, now, await this.city.get()).hygiene;
+        const door = clubDoor(to.club, to.open, c, hygiene, nycTime(now).hour);
+        cost = door.cover;
+        costLabel = `Cover at ${to.name}`;
+        status = `${door.note} 🎟️`;
+      }
     }
 
     if (action.kind === "ride") {
@@ -219,13 +255,28 @@ export class PlayService {
       if (mult > 1) needs = Object.fromEntries(Object.entries(needs).map(([k, v]) => [k, v > 0 ? Math.round(v * mult) : v]));
     }
 
+    // The dance floor is better with people on it, a live DJ, and after 11.
+    if (actionId === "dance" && needs) {
+      const dancers = await this.countDoing(p.roomId, "dance", c.id, now);
+      const djs = await this.countDoing(p.roomId, "dj_set", c.id, now);
+      const peak = !!room.club && peakHour(nycTime(now).hour);
+      const bonus = Math.min(dancers * CROWD_BONUS_PER_DANCER, CROWD_BONUS_CAP) + (djs ? LIVE_DJ_BONUS : 0) + (peak ? PEAK_BONUS : 0);
+      if (bonus > 0) {
+        needs = Object.fromEntries(
+          Object.entries(needs).map(([k, v]) => [k, k === "fun" || k === "social" ? Math.round(v * (1 + bonus)) : v]),
+        );
+      }
+      if (dancers >= 3) status = "Dancing 💃🏾 · the floor is packed";
+      else if (djs) status = "Dancing 💃🏾 · live DJ";
+    }
+
     if (cost) {
       await this.bank.addMoney(
         c.id,
         -cost,
         actionId === "ride_subway" ? "transit:fare" : `buy:${actionId}`,
         `act:${activityId}`,
-        { label: actionId === "ride_subway" ? `Subway fare to ${roomDef(dest!)?.neighborhood}` : action.label },
+        { label: actionId === "ride_subway" ? `Subway fare to ${roomDef(dest!)?.neighborhood}` : costLabel },
       );
     }
 
@@ -262,6 +313,18 @@ export class PlayService {
     this.scheduleTimer(endsAt - now, () => this.complete(c.id, activityId));
 
     return { activityId, arrival, startsAt, endsAt, trainDelayed: !!trainDelayed };
+  }
+
+  /** How many other players in this room (this copy of it) are doing an action right now. */
+  private async countDoing(roomId: string, actionId: string, exceptId: string, now: number): Promise<number> {
+    return this.characters
+      .createQueryBuilder("c")
+      .where("c.roomId = :roomId", { roomId })
+      .andWhere("c.id != :exceptId", { exceptId })
+      .andWhere("c.activity ->> 'actionId' = :actionId", { actionId })
+      .andWhere("(c.activity ->> 'startsAt')::bigint <= :now", { now })
+      .andWhere("(c.activity ->> 'endsAt')::bigint > :now", { now })
+      .getCount();
   }
 
   async stop(token: string) {
@@ -335,6 +398,13 @@ export class PlayService {
           now,
         );
       }
+      if (a.actionId === "dj_set" && progress >= 0.99) {
+        const dancers = await this.countDoing(a.roomId, "dance", c.id, now);
+        const tips = Math.min(dancers * DJ_TIP_PER_DANCER, DJ_TIP_CAP);
+        if (tips > 0) {
+          await this.bank.addMoney(c.id, tips, "tips:dj", `tips:${a.id}`, { label: `Tips from ${dancers} dancer${dancers === 1 ? "" : "s"}` });
+        }
+      }
       if (a.actionId.startsWith("gig_") && progress >= 0.99 && c.gig) {
         const r = await this.gigs.advanceGig(c, now, cityState, skills, moodlets);
         skills = r.skills;
@@ -346,7 +416,12 @@ export class PlayService {
 
     if (a.kind === "travel" && a.travelTo && now >= a.startsAt) {
       const from = await this.world.roomFor(a.roomId);
-      const at = a.actionId === "go_out" ? from?.exitTo?.at : undefined;
+      const at =
+        a.actionId === "go_out"
+          ? from?.exitTo?.at
+          : a.actionId === "walk_over"
+            ? from?.props.find((x) => `prop:${x.id}` === a.target)?.walkTo?.at
+            : undefined;
       patch.roomId = await this.world.moveToRoom(c.id, a.travelTo, now, at);
       moodlets = this.city.arrivalMoodlets(cityState, a.travelTo, moodlets, now);
     }

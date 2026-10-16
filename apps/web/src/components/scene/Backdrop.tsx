@@ -3,6 +3,8 @@
 import { useFrame } from "@react-three/fiber";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { BoxGeometry, Color, type Group, type InstancedMesh, MeshBasicMaterial, Object3D, SphereGeometry } from "three";
+import type { DistrictStyle } from "@nyl/content";
+import { Landmarks } from "./Landmarks";
 import { CITY, buildingMaterial, cityUniforms } from "./palette";
 
 /**
@@ -18,34 +20,46 @@ const V_ROADS = range(-REACH, REACH + 1).map((k) => -3 + k * PERIOD);
 const MIN = -3 - REACH * PERIOD;
 const MAX = 21 + REACH * PERIOD;
 
-interface Lot { x: number; z: number; w: number; d: number; h: number; color: string }
+interface Lot { x: number; z: number; w: number; d: number; h: number; color: string; glass?: boolean }
+
+/** Waterfront blocks: the East River runs between these depths behind the block, the other borough beyond. */
+export const RIVER = { near: -11, far: -39 };
+const wet = (style: DistrictStyle, z: number) => !!style.waterfront && z < RIVER.near && z > RIVER.far;
 interface Tree { x: number; z: number; s: number; color: string }
 interface Car { axis: "x" | "z"; lane: number; dir: 1 | -1; offset: number; speed: number; color: string }
 
-export function Backdrop({ seed, width, depth }: { seed: string; width: number; depth: number }) {
-  const city = useMemo(() => layoutCity(seed, width, depth), [seed, width, depth]);
+export function Backdrop({ seed, width, depth, style }: { seed: string; width: number; depth: number; style: DistrictStyle }) {
+  const city = useMemo(() => layoutCity(seed, width, depth, style), [seed, width, depth, style]);
   return (
     <group>
       <mesh rotation-x={-Math.PI / 2} position={[(MIN + MAX) / 2, -0.02, (MIN + MAX) / 2]} receiveShadow>
         <planeGeometry args={[MAX - MIN + 40, MAX - MIN + 40]} />
-        <meshStandardMaterial color={CITY.ground} />
+        <meshStandardMaterial color={style.palette.ground} />
       </mesh>
+      {style.waterfront && (
+        <mesh rotation-x={-Math.PI / 2} position={[(MIN + MAX) / 2, -0.004, (RIVER.near + RIVER.far) / 2]}>
+          <planeGeometry args={[MAX - MIN + 40, RIVER.near - RIVER.far]} />
+          <meshStandardMaterial color="#1f5868" roughness={0.18} metalness={0.35} />
+        </mesh>
+      )}
       {H_ROADS.map((z) => (
         <mesh key={`h${z}`} rotation-x={-Math.PI / 2} position={[(MIN + MAX) / 2, -0.012, z]} receiveShadow>
           <planeGeometry args={[MAX - MIN + 40, ROAD_W]} />
-          <meshStandardMaterial color={CITY.road} />
+          <meshStandardMaterial color={style.palette.road} />
         </mesh>
       ))}
       {V_ROADS.map((x) => (
         <mesh key={`v${x}`} rotation-x={-Math.PI / 2} position={[x, -0.011, (MIN + MAX) / 2]} receiveShadow>
           <planeGeometry args={[ROAD_W, MAX - MIN + 40]} />
-          <meshStandardMaterial color={CITY.road} />
+          <meshStandardMaterial color={style.palette.road} />
         </mesh>
       ))}
-      <Dashes />
-      <Buildings lots={city.lots} />
+      <Dashes style={style} />
+      <Buildings lots={city.lots.filter((l) => !l.glass)} />
+      <Buildings lots={city.lots.filter((l) => l.glass)} glass />
       <Trees trees={city.trees} />
-      <PathLights />
+      <PathLights style={style} />
+      <Landmarks style={style} roomId={seed} />
       {city.cars.map((c, i) => (
         <MovingCar key={i} car={c} />
       ))}
@@ -53,7 +67,10 @@ export function Backdrop({ seed, width, depth }: { seed: string; width: number; 
   );
 }
 
-function layoutCity(seed: string, width: number, depth: number) {
+function layoutCity(seed: string, width: number, depth: number, style: DistrictStyle) {
+  const sky = style.skyline;
+  const walls = style.palette.walls;
+  const leaf = style.palette.leaf;
   const rand = seeded(hashString(seed));
   const lots: Lot[] = [];
   const trees: Tree[] = [];
@@ -77,10 +94,13 @@ function layoutCity(seed: string, width: number, depth: number) {
           if (blocked(x0, z0, x0 + lw, z0 + ld)) continue;
           const cx = x0 + lw / 2;
           const cz = z0 + ld / 2;
-          if (rand() < 0.12) {
+          if (wet(style, cz) || (style.waterfront && wet(style, z0) !== wet(style, z0 + ld))) continue;
+          // Across the river: the other borough's skyline, mostly towers.
+          const across = !!style.waterfront && cz <= RIVER.far;
+          if (!across && rand() < 0.04 + sky.trees * 0.3) {
             // A pocket park.
             for (let t = 0; t < 5; t++) {
-              trees.push({ x: x0 + 0.8 + rand() * (lw - 1.6), z: z0 + 0.8 + rand() * (ld - 1.6), s: 1.1 + rand() * 0.6, color: pick(CITY.leaf, rand) });
+              trees.push({ x: x0 + 0.8 + rand() * (lw - 1.6), z: z0 + 0.8 + rand() * (ld - 1.6), s: 1.1 + rand() * 0.6, color: pick(leaf, rand) });
             }
             continue;
           }
@@ -89,10 +109,14 @@ function layoutCity(seed: string, width: number, depth: number) {
           const fall = Math.min(1, Math.max(0.16, (28 - front) / 18));
           // Right behind the block, stay near the shops' height so they still read as the focus.
           const near = cz > -7 && cx > -6 && cx < width + 6 ? 0.55 : 1;
-          const h = ((1.8 + rand() * rand() * 6) * fall + 0.6) * near;
+          const tower = rand() < (across ? 0.55 : sky.towers);
+          const top = across ? 22 : sky.max;
+          const h = tower
+            ? (top * (0.6 + rand() * 0.5)) * fall * near
+            : ((sky.min + rand() * rand() * (sky.max - sky.min)) * fall + 0.6) * near;
           const w = lw - 0.35 - rand() * 0.6;
           const d = ld - 0.35 - rand() * 0.6;
-          lots.push({ x: cx, z: cz, w, d, h, color: pick(CITY.walls, rand) });
+          lots.push({ x: cx, z: cz, w, d, h, color: tower ? pick(["#8a9ab0", "#6a7a90", "#9aaabb", "#5a6a7e"], rand) : pick(walls, rand), glass: tower });
         }
       }
     }
@@ -103,7 +127,7 @@ function layoutCity(seed: string, width: number, depth: number) {
     for (let x = MIN; x < MAX; x += 2.4 + rand() * 1.6) {
       for (const side of [-1, 1]) {
         const tz = z + side * (ROAD_W / 2 + 0.6);
-        if (!blocked(x - 0.5, tz - 0.5, x + 0.5, tz + 0.5) && rand() < 0.75) trees.push({ x, z: tz, s: 0.85 + rand() * 0.4, color: pick(CITY.leaf, rand) });
+        if (!blocked(x - 0.5, tz - 0.5, x + 0.5, tz + 0.5) && !wet(style, tz) && rand() < 0.15 + sky.trees * 1.5) trees.push({ x, z: tz, s: 0.85 + rand() * 0.4, color: pick(leaf, rand) });
       }
     }
   }
@@ -111,7 +135,7 @@ function layoutCity(seed: string, width: number, depth: number) {
     for (let z = MIN; z < MAX; z += 2.4 + rand() * 1.6) {
       for (const side of [-1, 1]) {
         const tx = x + side * (ROAD_W / 2 + 0.6);
-        if (!blocked(tx - 0.5, z - 0.5, tx + 0.5, z + 0.5) && rand() < 0.75) trees.push({ x: tx, z, s: 0.85 + rand() * 0.4, color: pick(CITY.leaf, rand) });
+        if (!blocked(tx - 0.5, z - 0.5, tx + 0.5, z + 0.5) && !wet(style, z) && rand() < 0.15 + sky.trees * 1.5) trees.push({ x: tx, z, s: 0.85 + rand() * 0.4, color: pick(leaf, rand) });
       }
     }
   }
@@ -122,7 +146,7 @@ function layoutCity(seed: string, width: number, depth: number) {
   for (const x of V_ROADS.slice(REACH - 1, REACH + 2)) {
     for (const dir of [1, -1] as const) cars.push({ axis: "z", lane: x + dir * 1.1, dir, offset: rand(), speed: 2.2 + rand() * 1.5, color: pick(carColors, rand) });
   }
-  for (const z of H_ROADS.filter((z) => z !== 10.5).slice(REACH - 2, REACH + 1)) {
+  for (const z of H_ROADS.filter((z) => z !== 10.5 && !wet(style, z)).slice(REACH - 2, REACH + 1)) {
     for (const dir of [1, -1] as const) cars.push({ axis: "x", lane: z - dir * 1.1, dir, offset: rand(), speed: 2.2 + rand() * 1.5, color: pick(carColors, rand) });
   }
   return { lots, trees, cars };
@@ -131,9 +155,9 @@ function layoutCity(seed: string, width: number, depth: number) {
 const UNIT_BOX = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 const dummy = new Object3D();
 
-function Buildings({ lots }: { lots: Lot[] }) {
+function Buildings({ lots, glass }: { lots: Lot[]; glass?: boolean }) {
   const ref = useRef<InstancedMesh>(null);
-  const material = useMemo(() => buildingMaterial(), []);
+  const material = useMemo(() => buildingMaterial({ glass: glass ? 1 : 0 }), [glass]);
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
@@ -191,17 +215,19 @@ export function Trees({ trees }: { trees: Tree[] }) {
   );
 }
 
-function Dashes() {
+function Dashes({ style }: { style: DistrictStyle }) {
   const ref = useRef<InstancedMesh>(null);
   const spots = useMemo(() => {
     const out: { x: number; z: number; along: "x" | "z" }[] = [];
     for (const z of H_ROADS) for (let x = MIN; x < MAX; x += 2) out.push({ x, z, along: "x" });
     for (const x of V_ROADS) for (let z = MIN; z < MAX; z += 2) out.push({ x, z, along: "z" });
     // Skip the crossings so dashes don't run through intersections.
-    return out.filter((s) =>
-      s.along === "x" ? !V_ROADS.some((x) => Math.abs(s.x - x) < ROAD_W / 2 + 0.5) : !H_ROADS.some((z) => Math.abs(s.z - z) < ROAD_W / 2 + 0.5),
+    return out.filter(
+      (s) =>
+        !wet(style, s.z) &&
+        (s.along === "x" ? !V_ROADS.some((x) => Math.abs(s.x - x) < ROAD_W / 2 + 0.5) : !H_ROADS.some((z) => Math.abs(s.z - z) < ROAD_W / 2 + 0.5)),
     );
-  }, []);
+  }, [style]);
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
@@ -249,7 +275,7 @@ export function GlowDots({ dots }: { dots: { x: number; z: number; color: string
   return <instancedMesh ref={ref} args={[DOT, material, dots.length]} />;
 }
 
-function PathLights() {
+function PathLights({ style }: { style: DistrictStyle }) {
   const dots = useMemo(() => {
     const out: { x: number; z: number; color: string }[] = [];
     let n = 0;
@@ -263,8 +289,8 @@ function PathLights() {
         for (const side of [-1, 1]) out.push({ x: x + side * (ROAD_W / 2 + 0.15), z, color: CITY.pathLight[n++ % 2]! });
       }
     }
-    return out.filter((d) => !(d.x > -0.4 && d.x < 16.4 && d.z > -0.4 && d.z < 16.4));
-  }, []);
+    return out.filter((d) => !(d.x > -0.4 && d.x < 16.4 && d.z > -0.4 && d.z < 16.4) && !wet(style, d.z));
+  }, [style]);
   return <GlowDots dots={dots} />;
 }
 

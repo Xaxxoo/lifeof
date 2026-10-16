@@ -7,6 +7,7 @@ import { poseAt, type MoveIntent } from "@nyl/game-core";
 import type { Look } from "@nyl/content";
 import { serverNow } from "@/lib/store";
 import { AvatarBody, type Pose } from "./AvatarBody";
+import { BEAT_MS } from "./ClubLights";
 import { STAIR_DEPTH, STAIR_MS } from "./SubwayEntrance";
 
 /** Where to put the avatar once an action starts (on the bed, on the sofa, facing the stove). */
@@ -69,6 +70,13 @@ export function Avatar({ look, intent, isMe, anchor, emerge }: AvatarProps) {
       posed.current.rotation.x = sleeping ? -Math.PI / 2 : 0;
       posed.current.position.y = sleeping ? 0.2 : 0;
       posed.current.position.z = sleeping ? -0.6 : 0;
+    }
+    if (acting && anchor.pose === "dance") {
+      // On the beat: bounce, and sway side to side every two beats.
+      const beat = now / BEAT_MS;
+      r.rotation.y += Math.sin(beat * Math.PI) * 0.5;
+      if (body.current) body.current.position.y = Math.abs(Math.sin(beat * Math.PI)) * 0.14;
+      return;
     }
     if (body.current) body.current.position.y = pose.moving && !acting ? Math.abs(Math.sin(now / 90)) * 0.05 : 0;
   });

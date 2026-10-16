@@ -2,7 +2,7 @@
 
 import type { Look } from "@nyl/content";
 
-export type Pose = "stand" | "sit" | "sleep";
+export type Pose = "stand" | "sit" | "sleep" | "dance";
 
 /**
  * A stylized character built from primitives. Forward is +z.

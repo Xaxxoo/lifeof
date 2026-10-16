@@ -17,7 +17,7 @@ export interface ActionDef {
   skill?: { key: SkillKey; xp: number };
   moodlet?: { id: string; label: string; value: number; hours: number };
   /** Pose while doing it. */
-  pose?: "stand" | "sit" | "sleep";
+  pose?: "stand" | "sit" | "sleep" | "dance";
   /** Shown as a speech-bubble-style status above the avatar. */
   status: string;
   /** Minimum skill level to do it. */
@@ -123,6 +123,37 @@ export const ACTIONS: Record<string, ActionDef> = {
     skill: { key: "fitness", xp: 30 } },
   shoot_hoops: { id: "shoot_hoops", label: "Run a pickup game", kind: "use", durationMs: 12 * SEC, needs: { energy: -20, hygiene: -15, fun: 25, social: 15 },
     pose: "stand", status: "Hooping 🏀", skill: { key: "fitness", xp: 30 } },
+  // Downtown and the bridge
+  walk_over: { id: "walk_over", label: "Walk over", kind: "travel", durationMs: 0, status: "" },
+  bridge_photo: { id: "bridge_photo", label: "Take the skyline photo", kind: "use", durationMs: 8 * SEC, needs: { fun: 25, social: 10 }, pose: "stand",
+    status: "Golden hour 🌇", moodlet: { id: "that-view", label: "That view", value: 6, hours: 3 } },
+  dumplings: { id: "dumplings", label: "Five pork dumplings ($3)", kind: "use", durationMs: 8 * SEC, needs: { hunger: 40 }, cost: 3, pose: "stand", status: "Dumplings 🥟" },
+  egg_tart: { id: "egg_tart", label: "Egg tarts ($3)", kind: "use", durationMs: 5 * SEC, needs: { hunger: 20, fun: 5 }, cost: 3, pose: "stand", status: "Egg tart 🥧" },
+  boba: { id: "boba", label: "Brown sugar boba ($7)", kind: "use", durationMs: 5 * SEC, needs: { hunger: 10, energy: 10, fun: 5 }, cost: 7, pose: "stand", status: "Boba 🧋" },
+  haggle: { id: "haggle", label: "Haggle for a 'Prada' bag ($15)", kind: "use", durationMs: 10 * SEC, needs: { fun: 20, social: 10 }, cost: 15, pose: "stand",
+    status: "Haggling 👜", skill: { key: "hustle", xp: 20 } },
+  temple_visit: { id: "temple_visit", label: "Light incense", kind: "use", durationMs: 10 * SEC, needs: { fun: 10, social: 5 }, pose: "stand", status: "Peaceful 🪷",
+    moodlet: { id: "peaceful", label: "At peace", value: 5, hours: 3 } },
+  xiangqi: { id: "xiangqi", label: "Play xiangqi with Uncle Wen", kind: "use", durationMs: 12 * SEC, needs: { fun: 20, social: 15 }, pose: "stand",
+    status: "Playing xiangqi ♟️", skill: { key: "charisma", xp: 15 } },
+  pastrami: { id: "pastrami", label: "Pastrami on rye ($28)", kind: "use", durationMs: 12 * SEC, needs: { hunger: 90 }, cost: 28, pose: "stand",
+    status: "Pastrami on rye 🥪", moodlet: { id: "katz", label: "I'll have what she's having", value: 6, hours: 3 } },
+  dollar_slice: { id: "dollar_slice", label: "A slice ($2)", kind: "use", durationMs: 5 * SEC, needs: { hunger: 30 }, cost: 2, pose: "stand", status: "Folding a slice 🍕" },
+  tattoo: { id: "tattoo", label: "Get a tattoo ($80)", kind: "use", durationMs: 25 * SEC, needs: { fun: 25, social: 10, energy: -10 }, cost: 80, pose: "sit",
+    status: "Getting inked 🖋️", skill: { key: "creativity", xp: 10 }, moodlet: { id: "fresh-ink", label: "Fresh ink", value: 8, hours: 12 } },
+  thrift: { id: "thrift", label: "Thrift a fit ($25)", kind: "use", durationMs: 12 * SEC, needs: { fun: 25 }, cost: 25, pose: "stand", status: "Thrifting 🧥",
+    moodlet: { id: "thrifted", label: "Thrifted a fit", value: 6, hours: 6 } },
+  museum_tour: { id: "museum_tour", label: "Tour a 1900s tenement ($30)", kind: "use", durationMs: 18 * SEC, needs: { fun: 20, social: 10 }, cost: 30, pose: "stand",
+    status: "On the tour 🏛️", skill: { key: "charisma", xp: 12 },
+    moodlet: { id: "footsteps", label: "Walked in their footsteps", value: 7, hours: 4 } },
+  watch_ticker: { id: "watch_ticker", label: "Watch the ticker", kind: "use", durationMs: 10 * SEC, needs: { fun: 5 }, pose: "stand", status: "Watching stocks 📈",
+    skill: { key: "hustle", xp: 15 } },
+  network: { id: "network", label: "Network in the lobby", kind: "use", durationMs: 12 * SEC, needs: { social: 15, energy: -5 }, pose: "stand", status: "Networking 🤝",
+    skill: { key: "charisma", xp: 15 } },
+  bull_photo: { id: "bull_photo", label: "Rub the bull for luck", kind: "use", durationMs: 6 * SEC, needs: { fun: 15 }, pose: "stand", status: "Rubbing the bull 🐂",
+    skill: { key: "hustle", xp: 5 }, moodlet: { id: "lucky", label: "Feeling lucky", value: 4, hours: 3 } },
+  salad: { id: "salad", label: "Power lunch salad ($16)", kind: "use", durationMs: 8 * SEC, needs: { hunger: 45, energy: 5 }, cost: 16, pose: "stand", status: "Salad 🥗" },
+
   // Treasure hunts: only offered where a hunt you joined says to look (see hunts.ts).
   hunt_search: { id: "hunt_search", label: "Search for the treasure 🔎", kind: "use", durationMs: 6 * SEC, needs: { fun: 10 }, pose: "stand",
     status: "Searching… 🔎" },
@@ -132,12 +163,21 @@ export const ACTIONS: Record<string, ActionDef> = {
   // Venues
   order_drink: { id: "order_drink", label: "Order a drink ($9)", kind: "use", durationMs: 8 * SEC, needs: { fun: 15, social: 5 }, cost: 9, pose: "stand", status: "Cheers 🍹" },
   order_water: { id: "order_water", label: "Ask for water (free)", kind: "use", durationMs: 5 * SEC, needs: { energy: 3 }, pose: "stand", status: "Hydrating 💧" },
-  dance: { id: "dance", label: "Dance", kind: "use", durationMs: 15 * SEC, needs: { fun: 30, social: 10, energy: -15 }, pose: "stand", status: "Dancing 💃🏾",
+  dance: { id: "dance", label: "Dance", kind: "use", durationMs: 15 * SEC, needs: { fun: 30, social: 10, energy: -15 }, pose: "dance", status: "Dancing 💃🏾",
     skill: { key: "fitness", xp: 10 } },
   dj_set: { id: "dj_set", label: "Play a set", kind: "use", durationMs: 18 * SEC, needs: { fun: 20, social: 10 }, pose: "stand", status: "On the decks 🎧",
     skill: { key: "creativity", xp: 30 }, requires: { key: "creativity", level: 3 } },
   latte: { id: "latte", label: "Oat latte ($7)", kind: "use", durationMs: 5 * SEC, needs: { energy: 20 }, cost: 7, pose: "stand", status: "Oat latte ☕" },
   pastry: { id: "pastry", label: "Croissant ($6)", kind: "use", durationMs: 5 * SEC, needs: { hunger: 20 }, cost: 6, pose: "stand", status: "Croissant 🥐" },
+  // Clubs
+  shots: { id: "shots", label: "Round of shots ($30)", kind: "use", durationMs: 8 * SEC, needs: { fun: 25, social: 20, energy: -5 }, cost: 30, pose: "stand",
+    status: "Shots! 🥃" },
+  vip_table: { id: "vip_table", label: "Bottle service in VIP ($150)", kind: "use", durationMs: 20 * SEC, needs: { fun: 50, social: 40 }, cost: 150, pose: "sit",
+    status: "In VIP 🍾", skill: { key: "charisma", xp: 20 }, moodlet: { id: "vip", label: "Bottle service", value: 12, hours: 6 } },
+  photo_booth: { id: "photo_booth", label: "Photo booth strip ($5)", kind: "use", durationMs: 6 * SEC, needs: { fun: 15, social: 10 }, cost: 5, pose: "stand",
+    status: "Striking a pose 📸" },
+  club_bathroom: { id: "club_bathroom", label: "Wait for the bathroom", kind: "use", durationMs: 15 * SEC, needs: { bladder: 100, social: 5 }, pose: "stand",
+    status: "In the bathroom line 🚻" },
   laptop_work: { id: "laptop_work", label: "Work on your laptop", kind: "use", durationMs: 15 * SEC, needs: { fun: -5, energy: -5 }, pose: "sit", status: "Typing 💻",
     skill: { key: "coding", xp: 20 } },
 

@@ -63,7 +63,7 @@ export class Character {
     startsAt: number;
     endsAt: number;
     needs?: Record<string, number>;
-    pose?: "stand" | "sit" | "sleep";
+    pose?: "stand" | "sit" | "sleep" | "dance";
     status: string;
     travelTo?: string;
     moodMultiplier?: number;

@@ -342,13 +342,16 @@ function MapApp({ me, city, onRide }: { me: CharacterDoc; city: CityStateDoc | n
   const status = (line: string) => city?.subway.lines.find((l) => l.line === line)?.status ?? "good";
   const W = 260;
   const H = 230;
-  const px = (x: number) => 20 + (x / 6) * (W - 40);
+  // Map units run from Lower Manhattan (x ≈ −3) to Bushwick (x ≈ 5.2).
+  const px = (x: number) => 18 + ((x + 3.2) / 8.6) * (W - 36);
   const py = (y: number) => 16 + (y / 7.6) * (H - 32);
 
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-2xl bg-[#1a2230]">
-        <path d={`M ${px(0)} ${py(0.4)} C ${px(-0.3)} ${py(3)}, ${px(0.4)} ${py(7)}, ${px(1)} ${py(7.6)}`} stroke="#3b6ea5" strokeWidth="10" fill="none" opacity="0.5" />
+        <path d={`M ${px(-0.5)} ${py(-0.2)} C ${px(-1.1)} ${py(2.4)}, ${px(-0.6)} ${py(6)}, ${px(0.2)} ${py(7.6)}`} stroke="#3b6ea5" strokeWidth="10" fill="none" opacity="0.5" />
+        {/* The Manhattan Bridge: walk it from DUMBO to Chinatown. */}
+        <line x1={px(NEIGHBORHOOD_MAP.dumbo!.x)} y1={py(NEIGHBORHOOD_MAP.dumbo!.y)} x2={px(NEIGHBORHOOD_MAP.chinatown!.x)} y2={py(NEIGHBORHOOD_MAP.chinatown!.y)} stroke="#9aa8b8" strokeWidth="2.5" strokeDasharray="5 3" />
         {STREETS.map((s) => {
           const p = NEIGHBORHOOD_MAP[s.id]!;
           const isHere = street?.id === s.id;

@@ -120,7 +120,7 @@ npx convex run city:poll311
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Next.js dev server |
-| `npm run dev:convex` | Convex dev (push functions on save) |
+| `npm run dev:convex` | Convex dev (push functions on save) — **removed; backend is NestJS in `apps/api`, run `npm run start:dev` there** |
 | `npm test` | `game-core` unit tests (Vitest) |
 | `npm run typecheck` | Typecheck every package |
 | `npm run build` | Production build of the web app |

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
+    "test:e2e": "nest build && node --import tsx --test test/*.e2e.ts",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { api, initSession, guestSession, type SessionStatus } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, initSession, guestSession, clearJwt, type SessionStatus } from "@/lib/api";
 import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
 import { SocketProvider, useSocket, useSocketEvent } from "@/lib/SocketContext";
@@ -9,6 +9,7 @@ import { ArrivalIntro } from "./ArrivalIntro";
 import { AuthScreen } from "./AuthScreen";
 import { CreateCharacter } from "./CreateCharacter";
 import { Splash } from "./GameLoader";
+import { SavePrompt } from "./SavePrompt";
 import { Toasts } from "./Toasts";
 import { SubwayRide } from "./SubwayRide";
 import { WorkScreen } from "./WorkScreen";
@@ -20,6 +21,8 @@ export function Game() {
   const [sessionStatus, setSessionStatus] = useState<SessionStatus | "loading" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [introData, setIntroData] = useState<{ name: string; origin: string } | null>(null);
+  // New players skip the login screen and play as a guest; /play?login shows it for returning players.
+  const [wantLogin, setWantLogin] = useState(() => new URLSearchParams(window.location.search).has("login"));
 
   const handleCreated = useCallback((data: { name: string; origin: string }) => {
     if (data.origin === "bk-native") return;
@@ -62,8 +65,28 @@ export function Game() {
   }, []);
 
   const handleGuest = useCallback(async () => {
-    await guestSession();
-    setSessionStatus("valid");
+    try {
+      await guestSession();
+      setSessionStatus("valid");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cannot reach server");
+      setSessionStatus("error");
+    }
+  }, []);
+
+  const autoGuest = sessionStatus === "none" && !wantLogin;
+  const guestStarting = useRef(false);
+  useEffect(() => {
+    if (!autoGuest || guestStarting.current) return;
+    guestStarting.current = true;
+    void handleGuest().finally(() => (guestStarting.current = false));
+  }, [autoGuest, handleGuest]);
+
+  // From character creation: drop the empty guest session and show the login screen.
+  const handleLogin = useCallback(() => {
+    clearJwt();
+    setWantLogin(true);
+    setSessionStatus("none");
   }, []);
 
   const ready = sessionStatus === "valid";
@@ -72,9 +95,10 @@ export function Game() {
 
   if (sessionStatus === "error") return <Splash note={`API unreachable — retrying… (${error})`} />;
   if (sessionStatus === "loading") return <Splash />;
+  if (autoGuest) return <Splash />;
   if (sessionStatus === "none") return <AuthScreen onAuth={handleAuth} onGuest={handleGuest} />;
   if (me === undefined) return <Splash />;
-  if (me === null) return <CreateCharacter onCreated={handleCreated} />;
+  if (me === null) return <CreateCharacter onCreated={handleCreated} onLogin={handleLogin} />;
   if (introData) return <ArrivalIntro name={introData.name} origin={introData.origin} onComplete={clearIntro} />;
   return (
     <SocketProvider>
@@ -173,6 +197,7 @@ function Session() {
       ) : (
         <World key={roomId} roomId={roomId} />
       )}
+      <SavePrompt />
       <Toasts />
     </>
   );

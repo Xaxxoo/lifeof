@@ -254,12 +254,17 @@ export default function LandingPage() {
       <nav className="fixed top-0 z-50 w-full border-b border-white/[0.04] bg-[#11131a]/70 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <span className="text-sm font-semibold tracking-[0.15em] uppercase text-white/70">New York Life</span>
-          <Link
-            href="/play"
-            className="rounded-full bg-tile px-4 py-1.5 text-sm font-semibold text-[#11131a] transition hover:bg-white hover:shadow-[0_0_20px_rgba(244,241,234,0.25)]"
-          >
-            Play free
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/play?login" className="text-sm text-white/50 transition hover:text-white/80">
+              Log in
+            </Link>
+            <Link
+              href="/play"
+              className="rounded-full bg-tile px-4 py-1.5 text-sm font-semibold text-[#11131a] transition hover:bg-white hover:shadow-[0_0_20px_rgba(244,241,234,0.25)]"
+            >
+              Play free
+            </Link>
+          </div>
         </div>
       </nav>
 

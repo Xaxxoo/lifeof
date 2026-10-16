@@ -32,7 +32,16 @@ interface GameState {
   toasts: Toast[];
   toast: (text: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;
+  /** True while playing without an account (null until we've asked the server). */
+  isGuest: boolean | null;
+  setIsGuest: (v: boolean) => void;
+  /** Why the "save your progress" sheet is open, or null when it's closed. */
+  saveReason: SaveReason | null;
+  openSave: (reason: SaveReason) => void;
+  closeSave: () => void;
 }
+
+export type SaveReason = "paycheck" | "gig" | "time" | "prize" | "manual";
 
 let toastId = 0;
 
@@ -53,6 +62,11 @@ export const useGame = create<GameState>((set) => ({
     setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4000);
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  isGuest: null,
+  setIsGuest: (isGuest) => set({ isGuest }),
+  saveReason: null,
+  openSave: (saveReason) => set({ saveReason }),
+  closeSave: () => set({ saveReason: null }),
 }));
 
 export const serverNow = () => Date.now() + useGame.getState().clockOffset;

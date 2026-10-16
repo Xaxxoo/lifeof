@@ -30,6 +30,8 @@ export function HuntsApp() {
   const fetcher = useCallback(() => api.hunts(), []);
   const hunts = usePolling(fetcher, 8000);
   const toast = useGame((s) => s.toast);
+  const isGuest = useGame((s) => s.isGuest);
+  const openSave = useGame((s) => s.openSave);
   const [busy, setBusy] = useState<string | null>(null);
   const [joined, setJoined] = useState<Record<string, HuntDoc>>({});
 
@@ -91,6 +93,11 @@ export function HuntsApp() {
                   {h.rank ? (
                     <>
                       <p className="font-semibold text-emerald-300">Finished #{h.rank}. You won {prizeText(h)}.</p>
+                      {isGuest && (
+                        <button onClick={() => openSave("prize")} className="mt-1 block font-semibold text-[#f3a712] underline">
+                          You&apos;re playing as a guest. Save your account to keep this prize.
+                        </button>
+                      )}
                       {h.payout?.status === "paid" && h.payout.txHash && (
                         <a href={txUrl(h.payout.txHash)} target="_blank" rel="noreferrer" className="mt-1 block text-emerald-200 underline">
                           See the payment on Stellar

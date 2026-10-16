@@ -21,7 +21,10 @@ import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { CharacterPreview } from "./CharacterPreview";
 
-export function CreateCharacter({ onCreated }: { onCreated?: (data: { name: string; origin: string }) => void } = {}) {
+export function CreateCharacter({
+  onCreated,
+  onLogin,
+}: { onCreated?: (data: { name: string; origin: string }) => void; onLogin?: () => void } = {}) {
   const [name, setName] = useState("");
   const [look, setLook] = useState<Look>(DEFAULT_LOOK);
   const [origin, setOrigin] = useState<string>(ORIGINS[0].id);
@@ -55,7 +58,7 @@ export function CreateCharacter({ onCreated }: { onCreated?: (data: { name: stri
         <CharacterPreview look={look} name={name} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-6 md:px-10 md:pt-12">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-6 md:px-10 md:pt-12">
         <div className="mx-auto max-w-md">
           <p className="text-xs font-medium uppercase tracking-widest text-white/50">JFK Terminal 4 · Arrivals</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">You just landed.</h1>
@@ -66,6 +69,10 @@ export function CreateCharacter({ onCreated }: { onCreated?: (data: { name: stri
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !busy && name.trim().length >= 2) void submit();
+                }}
+                enterKeyHint="go"
                 maxLength={20}
                 placeholder="What should Brooklyn call you?"
                 className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base outline-none focus:border-white/40"
@@ -151,14 +158,22 @@ export function CreateCharacter({ onCreated }: { onCreated?: (data: { name: stri
             You arrive with <span className="font-semibold text-white">${cash.toLocaleString("en-US")}</span> and a basement
             room in Crown Heights at $180 a week. Rent is due Sunday.
           </div>
-          {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-          <button
-            onClick={submit}
-            disabled={busy || name.trim().length < 2}
-            className="mt-4 w-full rounded-lg bg-[#f3a712] py-3 font-semibold text-black disabled:opacity-40"
-          >
-            {busy ? "Getting your MetroCard…" : "Leave the airport"}
-          </button>
+          {/* Pinned so phones can leave as soon as they've typed a name; everything else has a default. */}
+          <div className="sticky bottom-0 -mx-4 mt-4 bg-gradient-to-t from-[#11131a] via-[#11131a] to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+            {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+            <button
+              onClick={submit}
+              disabled={busy || name.trim().length < 2}
+              className="w-full rounded-lg bg-[#f3a712] py-3 font-semibold text-black disabled:bg-[#5e4a1f] disabled:text-black/60"
+            >
+              {busy ? "Getting your MetroCard…" : "Leave the airport"}
+            </button>
+            {onLogin && (
+              <button onClick={onLogin} disabled={busy} className="mt-3 w-full text-center text-sm text-white/50 underline decoration-white/20 underline-offset-2">
+                Already have an account? Log in
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </main>

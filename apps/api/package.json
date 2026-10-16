@@ -8,6 +8,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "test:e2e": "nest build && node --import tsx --test test/*.e2e.ts",
     "migration:generate": "tsx ../../node_modules/typeorm/cli.js migration:generate -d src/config/data-source.ts src/migrations/migration",
     "migration:run": "tsx ../../node_modules/typeorm/cli.js migration:run -d src/config/data-source.ts",
     "migration:revert": "tsx ../../node_modules/typeorm/cli.js migration:revert -d src/config/data-source.ts"

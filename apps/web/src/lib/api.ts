@@ -92,10 +92,27 @@ export async function initSession(): Promise<SessionStatus> {
   return "none";
 }
 
-/** Create a guest session (called explicitly when user clicks "Play as guest"). */
+const GUEST_STARTED_KEY = "nyl_guest_started";
+
+/** Create a guest session: new players go straight into the game and sign up later to save. */
 export async function guestSession(): Promise<void> {
   const data = await request<{ jwt: string }>("POST", "/auth/guest");
   setJwt(data.jwt);
+  try {
+    localStorage.setItem(GUEST_STARTED_KEY, String(Date.now()));
+  } catch {
+    // private browsing
+  }
+}
+
+/** When this browser started playing as a guest, if we know. */
+export function guestStartedAt(): number | null {
+  try {
+    const v = Number(localStorage.getItem(GUEST_STARTED_KEY));
+    return v > 0 ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 export { clearJwt };
@@ -109,6 +126,12 @@ export const api = {
   },
   login: async (email: string, password: string) => {
     const data = await request<{ jwt: string; userId: string; characterId: string | null }>("POST", "/auth/login", { email, password });
+    setJwt(data.jwt);
+    return data;
+  },
+  /** Attach an email + password to this guest session; the character and progress stay. */
+  upgrade: async (email: string, password: string) => {
+    const data = await request<{ jwt: string; userId: string; characterId: string | null }>("POST", "/auth/upgrade", { email, password });
     setJwt(data.jwt);
     return data;
   },

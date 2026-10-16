@@ -26,6 +26,14 @@ export class AuthController {
     return this.auth.login(body.email, body.password);
   }
 
+  /** Save a guest's progress: attach an email + password to the current session's character. */
+  @Post("upgrade")
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
+  async upgrade(@Req() req: { user: SessionUser }, @Body() body: { email: string; password: string }) {
+    return this.auth.upgrade(req.user, body.email, body.password);
+  }
+
   @Get("me")
   @UseGuards(JwtAuthGuard)
   me(@Req() req: { user: SessionUser }) {

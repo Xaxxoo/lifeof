@@ -47,6 +47,7 @@ import { CityService } from "../city/city.service";
 import { EventsGateway } from "../events/events.gateway";
 import { QuestsService } from "../quests/quests.service";
 import { HuntsService } from "../hunts/hunts.service";
+import { NeighborhoodsService } from "../neighborhoods/neighborhoods.service";
 
 const HOUR = 3_600_000;
 const TRAIN_DELAY_MS = 2 * 60_000;
@@ -115,6 +116,7 @@ export class PlayService {
     @Inject(forwardRef(() => EventsGateway)) private gateway: EventsGateway,
     private quests: QuestsService,
     private hunts: HuntsService,
+    private neighborhoods: NeighborhoodsService,
   ) {}
 
   async start(token: string, target: string, actionId: string, dest?: string) {
@@ -123,6 +125,7 @@ export class PlayService {
     if (c.roomId === "transit") throw new BadRequestException("You're on the train");
     const action = ACTIONS[actionId];
     if (!action) throw new BadRequestException("Unknown action");
+    if (action.kind === "menu") throw new BadRequestException("Open that from the menu");
     const now = Date.now();
 
     if (c.activity) {
@@ -278,6 +281,8 @@ export class PlayService {
         `act:${activityId}`,
         { label: actionId === "ride_subway" ? `Subway fare to ${roomDef(dest!)?.neighborhood}` : costLabel },
       );
+      // Spending in a player's shop pays its owner.
+      if (action.kind === "use") await this.neighborhoods.payOwner(p.roomId, c.id, cost, action.label, activityId);
     }
 
     await this.presenceRepo.update(p.id, { path, startedAt: now, updatedAt: now });

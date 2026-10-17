@@ -143,7 +143,8 @@ function layoutCity(seed: string, width: number, depth: number, style: DistrictS
   // Traffic on the avenues beside the block and on the cross streets, never through it.
   const carColors = ["#f4f1ea", "#f4f1ea", "#e9c46a", "#d8dde3", "#c0392b", "#3d6b8f"];
   const cars: Car[] = [];
-  for (const x of V_ROADS.slice(REACH - 1, REACH + 2)) {
+  // Avenues that would cut through a wide block carry no traffic.
+  for (const x of V_ROADS.slice(REACH - 1, REACH + 2).filter((x) => x + ROAD_W / 2 < 0 || x - ROAD_W / 2 > width)) {
     for (const dir of [1, -1] as const) cars.push({ axis: "z", lane: x + dir * 1.1, dir, offset: rand(), speed: 2.2 + rand() * 1.5, color: pick(carColors, rand) });
   }
   for (const z of H_ROADS.filter((z) => z !== 10.5 && !wet(style, z)).slice(REACH - 2, REACH + 1)) {

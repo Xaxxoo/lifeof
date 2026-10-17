@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { registerPlayerBlocks } from "@nyl/content";
 import type { MoveIntent } from "@nyl/game-core";
 
 export interface Toast {
@@ -32,6 +33,11 @@ interface GameState {
   toasts: Toast[];
   toast: (text: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;
+  /** Bumped each time player-built neighborhoods are (re)registered, so scenes and maps redraw. */
+  neighborhoodsVersion: number;
+  /** The latest neighborhoods list (prices, what's left to found). */
+  neighborhoods: import("./types").NeighborhoodsDoc | null;
+  setNeighborhoods: (doc: import("./types").NeighborhoodsDoc) => void;
   /** True while playing without an account (null until we've asked the server). */
   isGuest: boolean | null;
   setIsGuest: (v: boolean) => void;
@@ -55,6 +61,12 @@ export const useGame = create<GameState>((set) => ({
   descendUntil: null,
   lastRoomId: null,
   setPendingGo: (pendingGo) => set({ pendingGo }),
+  neighborhoodsVersion: 0,
+  neighborhoods: null,
+  setNeighborhoods: (doc) => {
+    registerPlayerBlocks(doc.blocks);
+    set((s) => ({ neighborhoods: doc, neighborhoodsVersion: s.neighborhoodsVersion + 1 }));
+  },
   toasts: [],
   toast: (text, tone = "info") => {
     const id = ++toastId;

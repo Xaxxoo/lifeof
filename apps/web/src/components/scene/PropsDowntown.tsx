@@ -24,6 +24,8 @@ export function DowntownProp({ prop: p, night }: { prop: Prop; night: boolean })
       return <BridgeTower x={cx} />;
     case "rail":
       return <Fence prop={p} />;
+    case "vacantlot":
+      return <VacantLot prop={p} night={night} />;
     case "newsstand":
       return (
         <group position={[cx, 0, cz]}>
@@ -98,6 +100,97 @@ function ChargingBull({ x, z }: { x: number; z: number }) {
       </mesh>
     </group>
   );
+}
+
+/**
+ * An empty lot on a player-built block: gravel and weeds behind a chain-link fence with a sign. Once
+ * someone owns it, the sign says "coming soon" and the construction barriers go up.
+ */
+function VacantLot({ prop: p, night }: { prop: Prop; night: boolean }) {
+  const cx = p.x + p.w / 2;
+  const cz = p.y + p.h / 2;
+  const owned = /coming soon/i.test(p.label ?? "");
+  const tex = useMemo(() => lotSignTexture(owned ? "COMING SOON" : "FOR SALE", owned ? "#f3a712" : "#c0392b"), [owned]);
+  useEffect(() => () => tex.dispose(), [tex]);
+  const weeds = useMemo(
+    () => Array.from({ length: 14 }, (_, i) => ({ x: ((i * 37) % 31) / 31 - 0.5, z: ((i * 53) % 29) / 29 - 0.5, s: 0.6 + ((i * 17) % 7) / 10 })),
+    [],
+  );
+  return (
+    <group position={[cx, 0, cz]}>
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.01, 0]} receiveShadow>
+        <planeGeometry args={[p.w - 0.1, p.h - 0.1]} />
+        <meshStandardMaterial color="#7a7468" roughness={1} />
+      </mesh>
+      {weeds.map((w, i) => (
+        <mesh key={i} position={[w.x * (p.w - 0.6), 0.12 * w.s, w.z * (p.h - 0.6)]}>
+          <coneGeometry args={[0.12 * w.s, 0.26 * w.s, 5]} />
+          <meshStandardMaterial color={i % 3 ? "#5a7a3a" : "#6e8a44"} />
+        </mesh>
+      ))}
+      {/* Chain-link along the sidewalk side and the two ends */}
+      {(
+        [
+          [0, p.h / 2 - 0.05, p.w, 0],
+          [-p.w / 2 + 0.05, 0, p.h, Math.PI / 2],
+          [p.w / 2 - 0.05, 0, p.h, Math.PI / 2],
+        ] as const
+      ).map(([x, z, len, rot], i) => (
+        <group key={i} position={[x, 0, z]} rotation-y={rot}>
+          <mesh position={[0, 0.7, 0]}>
+            <planeGeometry args={[len, 1.4]} />
+            <meshStandardMaterial color="#a8b0b8" transparent opacity={0.3} side={2} />
+          </mesh>
+          <mesh position={[0, 1.4, 0]}>
+            <boxGeometry args={[len, 0.04, 0.04]} />
+            <meshStandardMaterial color="#6a7078" />
+          </mesh>
+          {Array.from({ length: Math.round(len) + 1 }, (_, k) => (
+            <mesh key={k} position={[-len / 2 + (k * len) / Math.round(len), 0.7, 0]}>
+              <cylinderGeometry args={[0.03, 0.03, 1.4, 6]} />
+              <meshStandardMaterial color="#6a7078" />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      <mesh position={[0, 1.25, p.h / 2 + 0.02]}>
+        <planeGeometry args={[1.6, 0.8]} />
+        <meshStandardMaterial map={tex} emissive="#ffffff" emissiveMap={tex} emissiveIntensity={night ? 0.4 : 0.05} />
+      </mesh>
+      {owned &&
+        [-1, 1].map((s) => (
+          <group key={s} position={[s * 1.1, 0, p.h / 2 - 0.5]}>
+            <mesh position={[0, 0.35, 0]}>
+              <boxGeometry args={[0.8, 0.5, 0.12]} />
+              <meshStandardMaterial color="#ff7b00" />
+            </mesh>
+            <mesh position={[0, 0.4, 0.07]}>
+              <boxGeometry args={[0.8, 0.1, 0.01]} />
+              <meshStandardMaterial color="#ffffff" />
+            </mesh>
+          </group>
+        ))}
+    </group>
+  );
+}
+
+function lotSignTexture(text: string, color: string) {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 128;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, 256, 128);
+  g.fillStyle = color;
+  g.fillRect(0, 0, 256, 18);
+  g.fillRect(0, 110, 256, 18);
+  g.font = "bold 40px Helvetica, Arial, sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(text, 128, 64, 240);
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
 }
 
 /** Stone stairs up to the bridge walkway, with the green sign. */

@@ -132,6 +132,28 @@ function Session() {
   const [liveRoomId, setRoomId] = useState<string | null>(null);
   const { socket, connected, subscribeRoom } = useSocket();
 
+  // Player-built neighborhoods are part of the map: load them before drawing any room, and again
+  // whenever someone founds one, buys a lot or builds a shop.
+  const setNeighborhoods = useGame((s) => s.setNeighborhoods);
+  const [hoodsReady, setHoodsReady] = useState(false);
+  const loadHoods = useCallback(() => api.neighborhoods().then(setNeighborhoods), [setNeighborhoods]);
+  useEffect(() => {
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const attempt = () =>
+      loadHoods()
+        .then(() => !cancelled && setHoodsReady(true))
+        .catch(() => {
+          if (!cancelled) retry = setTimeout(attempt, 3000);
+        });
+    void attempt();
+    return () => {
+      cancelled = true;
+      clearTimeout(retry);
+    };
+  }, [loadHoods]);
+  useSocketEvent("neighborhoods:changed", () => void loadHoods().catch(() => {}));
+
   // Listen for server-pushed room changes
   useSocketEvent<{ roomId: string }>("room:changed", (data) => {
     setRoomId(data.roomId);
@@ -187,7 +209,7 @@ function Session() {
   // A new room means a new scene; drop any optimistic path from the old one.
   useEffect(() => setLocalIntent(null), [roomId, setLocalIntent]);
 
-  if (!joined || !roomId) return <Splash note="Heading to Crown Heights…" />;
+  if (!joined || !roomId || !hoodsReady) return <Splash note="Heading to Crown Heights…" />;
   return (
     <>
       {roomId === "work" ? (

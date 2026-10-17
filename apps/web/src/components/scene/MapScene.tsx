@@ -75,7 +75,7 @@ export function MapScene({
       <Manhattan />
       <MapBridge from="dumbo" to="chinatown" />
       <Park />
-      <SubwayLines lineStatus={lineStatus} />
+      <SubwayLines lineStatus={lineStatus} places={places} />
       <Districts places={places} onFocus={onFocus} />
       <Landmarks places={places} picked={picked} onPick={onPick} />
       {hereId && <YouAreHere roomId={hereId} />}
@@ -390,7 +390,8 @@ function Landmarks({ places, picked, onPick }: { places: Place[]; picked: Place 
   );
 }
 
-function SubwayLines({ lineStatus }: { lineStatus: (l: string) => string }) {
+/** `places` changes when player-built blocks do, which is when new stations appear. */
+function SubwayLines({ lineStatus, places }: { lineStatus: (l: string) => string; places: Place[] }) {
   const links = useMemo(() => {
     const out: { key: string; line: string; a: { x: number; z: number }; b: { x: number; z: number } }[] = [];
     for (let i = 0; i < STREETS.length; i++) {
@@ -402,7 +403,8 @@ function SubwayLines({ lineStatus }: { lineStatus: (l: string) => string }) {
       }
     }
     return out;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- STREETS grows with player-built blocks; places tracks it
+  }, [places]);
   return (
     <group>
       {links.map((l) => {

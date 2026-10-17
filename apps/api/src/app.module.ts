@@ -27,6 +27,7 @@ import { ListingsModule } from "./listings/listings.module";
 import { QuestsModule } from "./quests/quests.module";
 import { StoriesModule } from "./stories/stories.module";
 import { HuntsModule } from "./hunts/hunts.module";
+import { NeighborhoodsModule } from "./neighborhoods/neighborhoods.module";
 import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
 
 @Module({
@@ -65,6 +66,7 @@ import { ScheduledTasksService } from "./tasks/scheduled-tasks.service";
     QuestsModule,
     StoriesModule,
     HuntsModule,
+    NeighborhoodsModule,
   ],
   providers: [
     ScheduledTasksService,

@@ -11,6 +11,7 @@ import { CityModule } from "../city/city.module";
 import { EventsModule } from "../events/events.module";
 import { QuestsModule } from "../quests/quests.module";
 import { HuntsModule } from "../hunts/hunts.module";
+import { NeighborhoodsModule } from "../neighborhoods/neighborhoods.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { HuntsModule } from "../hunts/hunts.module";
     forwardRef(() => EventsModule),
     QuestsModule,
     HuntsModule,
+    NeighborhoodsModule,
   ],
   controllers: [PlayController],
   providers: [PlayService],

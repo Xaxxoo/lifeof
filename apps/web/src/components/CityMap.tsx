@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { DELAY_CAP, ROOMS, STREETS, SUBWAY_FARE, roomDef, route, type Prop, type RoomDef } from "@nyl/content";
 import { LineBullet } from "./LineBullet";
 import { useLabelAnchors } from "./scene/Labels";
 import { MapLabels, MapScene } from "./scene/MapScene";
+import { useGame } from "@/lib/store";
 import type { CharacterDoc, CityStateDoc } from "@/lib/types";
 
 /** Somewhere you can go: a tappable thing on a block. */
@@ -37,8 +38,8 @@ function iconFor(p: Prop): string {
   return "🏪";
 }
 
-/** Every labelled thing you can do something with, on every block. */
-export const PLACES: Place[] = STREETS.flatMap((s) =>
+/** Every labelled thing you can do something with, on every block (player-built ones too, so it's read fresh). */
+export const cityPlaces = (): Place[] => STREETS.flatMap((s) =>
   s.props
     .filter((p) => p.label && p.actions?.length && p.kind !== "subway" && p.kind !== "door")
     .map((p) => ({
@@ -80,6 +81,9 @@ export function CityMap({
 }) {
   const here = hereId ? roomDef(hereId) : blockOf(roomDef(me.roomId));
   const anchors = useLabelAnchors();
+  const hoodsVersion = useGame((s) => s.neighborhoodsVersion);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read when player-built blocks change
+  const places = useMemo(() => cityPlaces(), [hoodsVersion]);
   const [focus, setFocus] = useState<string | null>(null);
   const [picked, setPicked] = useState<Place | null>(null);
   const [query, setQuery] = useState("");
@@ -87,8 +91,8 @@ export function CityMap({
   const status = (line: string) => city?.subway.lines.find((l) => l.line === line)?.status ?? "good";
 
   const results = query.trim()
-    ? PLACES.filter((p) => `${p.label} ${p.neighborhood}`.toLowerCase().includes(query.trim().toLowerCase()))
-    : PLACES.filter((p) => p.roomId === (focus ?? here?.id));
+    ? places.filter((p) => `${p.label} ${p.neighborhood}`.toLowerCase().includes(query.trim().toLowerCase()))
+    : places.filter((p) => p.roomId === (focus ?? here?.id));
 
   const trip = picked ? tripTo(picked, here, status) : null;
 
@@ -97,7 +101,7 @@ export function CityMap({
       <div className="absolute inset-0">
         <MapScene
           anchors={anchors}
-          places={PLACES}
+          places={places}
           hereId={here?.id ?? null}
           focus={focus}
           picked={picked}
@@ -115,7 +119,7 @@ export function CityMap({
       </div>
       <MapLabels
         anchors={anchors}
-        places={PLACES}
+        places={places}
         hereId={here?.id ?? null}
         focus={focus}
         picked={picked}

@@ -22,8 +22,10 @@ import { User } from "../entities/user.entity";
 import { Hunt } from "../entities/hunt.entity";
 import { HuntProgress } from "../entities/hunt-progress.entity";
 import { ModerationAction } from "../entities/moderation-action.entity";
+import { Neighborhood } from "../entities/neighborhood.entity";
+import { Lot } from "../entities/lot.entity";
 
-export const entities = [Character, Presence, PlacedObject, LedgerEntry, Message, CityState, StellarWallet, Home, Relationship, Block, Report, DirectMessage, Crew, CrewMember, Listing, Application, Lease, QuestProgress, User, Hunt, HuntProgress, ModerationAction];
+export const entities = [Character, Presence, PlacedObject, LedgerEntry, Message, CityState, StellarWallet, Home, Relationship, Block, Report, DirectMessage, Crew, CrewMember, Listing, Application, Lease, QuestProgress, User, Hunt, HuntProgress, ModerationAction, Neighborhood, Lot];
 
 export function databaseConfig(config: ConfigService): TypeOrmModuleOptions {
   const isProd = config.get("NODE_ENV") === "production";

@@ -53,6 +53,7 @@ import { BuildPanel, type BuildTab, type Ghost } from "./BuildPanel";
 import { Hud } from "./Hud";
 import { prizeText } from "./HuntsApp";
 import { CityMap } from "./CityMap";
+import { LotSheet } from "./NeighborhoodsApp";
 import { Phone, type PhoneTab } from "./Phone";
 import { Avatar, type ActivityAnchor } from "./scene/Avatar";
 import { Furniture, FurniturePiece, type PlacedObject } from "./scene/Furniture";
@@ -92,7 +93,10 @@ function useHome(homeId: string | null): [HomeDoc | null, () => void] {
 export function World({ roomId }: { roomId: string }) {
   const homeId = roomId.startsWith("home:") ? roomId.slice("home:".length) : null;
   const [home, refreshHome] = useHome(homeId);
-  const room = useMemo(() => (home ? homeRoomDef(roomId, home) : roomDef(roomId)!), [roomId, home]);
+  // Player-built blocks change as people build; redraw when they do.
+  const hoodsVersion = useGame((s) => s.neighborhoodsVersion);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- hoodsVersion re-reads roomDef after neighborhoods re-register
+  const room = useMemo(() => (home ? homeRoomDef(roomId, home) : roomDef(roomId)!), [roomId, home, hoodsVersion]);
   const isHome = room.kind === "home";
   const indoor = isHome || room.kind === "venue";
   // Each neighborhood has its own look; shops and venues take the look of the block outside.
@@ -153,6 +157,7 @@ export function World({ roomId }: { roomId: string }) {
 
   const [menuKey, setMenuKey] = useState<string | null>(null);
   const [phoneTab, setPhoneTab] = useState<PhoneTab | null>(null);
+  const [lotKey, setLotKey] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [buildMode, setBuildMode] = useState(false);
   const [ghost, setGhost] = useState<Ghost | null>(null);
@@ -293,6 +298,7 @@ export function World({ roomId }: { roomId: string }) {
     setMenuKey(null);
     setPhoneTab(null);
     setMapOpen(false);
+    setLotKey(null);
   }
 
   function walkTo(x: number, y: number) {
@@ -393,6 +399,11 @@ export function World({ roomId }: { roomId: string }) {
 
   async function doAction(target: string, actionId: string, dest?: string): Promise<boolean> {
     closePanels();
+    // Lots open their own sheet (buy, build) instead of running an action.
+    if (ACTIONS[actionId]?.kind === "menu") {
+      setLotKey(target);
+      return false;
+    }
     if (actionId === "ride_subway" && !dest) {
       setPhoneTab("map");
       return false;
@@ -684,6 +695,10 @@ export function World({ roomId }: { roomId: string }) {
                 : undefined
           }
         />
+      )}
+
+      {lotKey && (
+        <LotSheet blockId={baseRoomId(roomId)} propId={lotKey} me={me ?? null} onClose={() => setLotKey(null)} />
       )}
 
       {mapOpen && me && (

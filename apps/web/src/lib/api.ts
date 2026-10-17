@@ -281,6 +281,15 @@ export const api = {
 
   // Treasure hunts
   hunts: () => request<import("./types").HuntDoc[]>("GET", "/hunts"),
+
+  // Player-built neighborhoods
+  neighborhoods: () => request<import("./types").NeighborhoodsDoc>("GET", "/neighborhoods"),
+  foundNeighborhood: (neighborhoodId: string, street: string) =>
+    request<import("@nyl/content").PlayerBlockDoc>("POST", "/neighborhoods/found", { neighborhoodId, street }),
+  buyBlockLot: (blockId: string, index: number) =>
+    request<import("@nyl/content").PlayerBlockDoc>("POST", `/neighborhoods/${encodeURIComponent(blockId)}/lots/${index}/buy`),
+  buildBlockLot: (blockId: string, index: number, shop: import("@nyl/content").PlayerShop) =>
+    request<import("@nyl/content").PlayerBlockDoc>("POST", `/neighborhoods/${encodeURIComponent(blockId)}/lots/${index}/build`, shop),
   joinHunt: (huntId: string) => request<import("./types").HuntDoc>("POST", `/hunts/${encodeURIComponent(huntId)}/join`),
 
   // Stories

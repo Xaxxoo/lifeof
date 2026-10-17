@@ -27,10 +27,11 @@ import { api } from "@/lib/api";
 import { playerMessage } from "@/lib/errors";
 import { usePolling } from "@/lib/hooks";
 import { serverNow, useGame } from "@/lib/store";
+import { NeighborhoodsApp } from "./NeighborhoodsApp";
 import type { CharacterDoc, CityStateDoc, RelationshipDoc, BlockedPlayerDoc, DmThreadDoc, DirectMessageDoc, CrewDoc, ListingDoc, ApplicationDoc, LeaseDoc, QuestProgressDoc, StoryChapterDoc } from "@/lib/types";
 import { SOCIAL_INTERACTIONS, SOCIAL_INTERACTION_LIST, RELATIONSHIP_LEVELS } from "@nyl/content";
 
-export type PhoneTab = "hunts" | "map" | "gigs" | "jobs" | "bank" | "wallet" | "me" | "shop" | "today" | "settings" | "people" | "chats" | "homes";
+export type PhoneTab = "hunts" | "map" | "build" | "gigs" | "jobs" | "bank" | "wallet" | "me" | "shop" | "today" | "settings" | "people" | "chats" | "homes";
 
 export function Phone({
   me,
@@ -68,7 +69,7 @@ export function Phone({
         </button>
       </div>
       <div className="mt-2 flex flex-wrap gap-1 px-3">
-        {(["hunts", "map", "people", "chats", "gigs", "jobs", "bank", "wallet", "me", "shop", "homes", "today", "settings"] as PhoneTab[]).map((t) => (
+        {(["hunts", "map", "build", "people", "chats", "gigs", "jobs", "bank", "wallet", "me", "shop", "homes", "today", "settings"] as PhoneTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -81,6 +82,7 @@ export function Phone({
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {tab === "hunts" && <HuntsApp />}
         {tab === "map" && <MapApp me={me} city={city} onRide={onRide ?? (() => {})} />}
+        {tab === "build" && <NeighborhoodsApp me={me} />}
         {tab === "people" && <People me={me} />}
         {tab === "chats" && <Chats me={me} />}
         {tab === "gigs" && <Gigs me={me} />}
@@ -344,7 +346,7 @@ function MapApp({ me, city, onRide }: { me: CharacterDoc; city: CityStateDoc | n
   const H = 230;
   // Map units run from Lower Manhattan (x ≈ −3) to Bushwick (x ≈ 5.2).
   const px = (x: number) => 18 + ((x + 3.2) / 8.6) * (W - 36);
-  const py = (y: number) => 16 + (y / 7.6) * (H - 32);
+  const py = (y: number) => 16 + ((y + 1.3) / 8.9) * (H - 32);
 
   return (
     <div>

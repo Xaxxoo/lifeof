@@ -5,7 +5,8 @@ import type { Needs, SkillKey } from "@nyl/game-core";
  * (5–45 s) so the game stays snappy.
  * `needs` are the totals for a full run; stopping early pays the share done.
  */
-export type ActionKind = "use" | "travel" | "work" | "ride";
+/** `menu` opens a panel on the client (buying a lot, say) and never runs on the server. */
+export type ActionKind = "use" | "travel" | "work" | "ride" | "menu";
 
 export interface ActionDef {
   id: string;
@@ -153,6 +154,19 @@ export const ACTIONS: Record<string, ActionDef> = {
   bull_photo: { id: "bull_photo", label: "Rub the bull for luck", kind: "use", durationMs: 6 * SEC, needs: { fun: 15 }, pose: "stand", status: "Rubbing the bull 🐂",
     skill: { key: "hustle", xp: 5 }, moodlet: { id: "lucky", label: "Feeling lucky", value: 4, hours: 3 } },
   salad: { id: "salad", label: "Power lunch salad ($16)", kind: "use", durationMs: 8 * SEC, needs: { hunger: 45, energy: 5 }, cost: 16, pose: "stand", status: "Salad 🥗" },
+
+  // Player-built neighborhoods
+  lot_open: { id: "lot_open", label: "Look at this lot", kind: "menu", durationMs: 0, status: "" },
+  pb_plate: { id: "pb_plate", label: "House plate ($12)", kind: "use", durationMs: 10 * SEC, needs: { hunger: 65, social: 5 }, cost: 12, pose: "stand",
+    status: "Eating local 🍲", moodlet: { id: "ate-local", label: "Ate at a neighbor's spot", value: 4, hours: 3 } },
+  pb_coffee: { id: "pb_coffee", label: "Coffee ($5)", kind: "use", durationMs: 5 * SEC, needs: { energy: 20 }, cost: 5, pose: "stand", status: "Coffee ☕" },
+  pb_pastry: { id: "pb_pastry", label: "Pastry ($4)", kind: "use", durationMs: 5 * SEC, needs: { hunger: 20 }, cost: 4, pose: "stand", status: "Pastry 🥐" },
+  pb_shop: { id: "pb_shop", label: "Shop the new drop ($30)", kind: "use", durationMs: 10 * SEC, needs: { fun: 25 }, cost: 30, pose: "stand", status: "Shopping 🛍️",
+    moodlet: { id: "new-fit", label: "New fit", value: 6, hours: 6 } },
+  pb_vinyl: { id: "pb_vinyl", label: "Buy a record ($15)", kind: "use", durationMs: 8 * SEC, needs: { fun: 20 }, cost: 15, pose: "stand", status: "New vinyl 💿",
+    skill: { key: "creativity", xp: 10 } },
+  pb_book: { id: "pb_book", label: "Buy a book ($12)", kind: "use", durationMs: 8 * SEC, needs: { fun: 15 }, cost: 12, pose: "stand", status: "New book 📚",
+    skill: { key: "charisma", xp: 10 } },
 
   // Treasure hunts: only offered where a hunt you joined says to look (see hunts.ts).
   hunt_search: { id: "hunt_search", label: "Search for the treasure 🔎", kind: "use", durationMs: 6 * SEC, needs: { fun: 10 }, pose: "stand",

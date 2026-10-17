@@ -5,6 +5,16 @@ import {
   BASEMENT_STARTER,
   CROSSINGS,
   DISTRICTS,
+  FACADE_COLORS,
+  FACADE_STYLES,
+  FOUNDABLE,
+  LOTS_PER_BLOCK,
+  SHOP_TEMPLATE_IDS,
+  lotShopRoomId,
+  playerBlockRooms,
+  registerPlayerBlocks,
+  type PlayerBlockDoc,
+  type PlayerLot,
   GIGS,
   HOME_TIERS,
   ITEM_BY_ID,
@@ -265,5 +275,66 @@ describe("room instances", () => {
   it("gives an instance its base room's layout", () => {
     expect(roomDef("crown-heights:3")).toBe(roomDef("crown-heights"));
     expect(roomDef("venue:warehouse:2")?.id).toBe("venue:warehouse");
+  });
+});
+
+describe("player-built neighborhoods", () => {
+  const lots = (n: number, f: (i: number) => Partial<PlayerLot>): PlayerLot[] =>
+    Array.from({ length: n }, (_, i) => ({ index: i, ownerId: null, ownerName: null, shop: null, ...f(i) }));
+
+  // Every shop kind, a lot that's owned but empty, and lots for sale, across every foundable neighborhood.
+  const docs: PlayerBlockDoc[] = FOUNDABLE.map((hood, h) => ({
+    id: hood.id,
+    street: hood.streets[0]!,
+    founderId: "f",
+    founderName: "Founder",
+    lots: lots(LOTS_PER_BLOCK, (i) => {
+      const t = SHOP_TEMPLATE_IDS[(h * LOTS_PER_BLOCK + i) % SHOP_TEMPLATE_IDS.length]!;
+      if (i === 5) return {};
+      if (i === 4) return { ownerId: "o", ownerName: "Owner" };
+      return { ownerId: "o", ownerName: "Owner", shop: { name: `Shop ${i}`, template: t, color: FACADE_COLORS[i]!, arch: FACADE_STYLES[i % FACADE_STYLES.length]! } };
+    }),
+  }));
+
+  it("builds playable blocks and shops for every neighborhood and shop kind", () => {
+    for (const doc of docs) {
+      const built = playerBlockRooms(doc)!;
+      expect(built, doc.id).not.toBeNull();
+      for (const room of [built.street, ...built.shops]) {
+        const { grid, interactables } = buildRoomLayout(room, []);
+        expect(isWalkable(grid, room.spawn), `${room.id} spawn`).toBe(true);
+        for (const p of room.props) for (const a of p.actions ?? []) expect(ACTIONS[a], `${room.id} ${p.id}: ${a}`).toBeDefined();
+        for (const thing of interactables.values()) {
+          if (!thing.actions.length) continue;
+          expect(findPathToAny(grid, room.spawn, goalTiles(thing)), `${room.id} ${thing.key}`).not.toBeNull();
+        }
+      }
+      for (const s of built.shops) expect(s.exitTo?.roomId).toBe(doc.id);
+    }
+  });
+
+  it("registers into the world and the subway, replaces on change, and removes", () => {
+    registerPlayerBlocks(docs);
+    for (const doc of docs) {
+      expect(roomDef(doc.id)?.name).toBe(doc.street);
+      expect(STREETS.some((s) => s.id === doc.id)).toBe(true);
+      expect(route("crown-heights", doc.id), doc.id).not.toBeNull();
+      expect(roomDef(lotShopRoomId(doc.id, 0))).not.toBeNull();
+      expect(isInstanceable(`${doc.id}:2`)).toBe(true);
+    }
+    const renamed = { ...docs[0]!, lots: lots(LOTS_PER_BLOCK, () => ({})) };
+    registerPlayerBlocks([renamed]);
+    expect(roomDef(lotShopRoomId(renamed.id, 0)), "a demolished shop's interior is gone").toBeNull();
+    expect(roomDef(docs[1]!.id), "an unlisted block is removed").toBeNull();
+    expect(STREETS.some((s) => s.id === docs[1]!.id)).toBe(false);
+    registerPlayerBlocks([]);
+    expect(roomDef(renamed.id)).toBeNull();
+  });
+
+  it("only offers neighborhoods the game doesn't already have", () => {
+    for (const hood of FOUNDABLE) {
+      expect(ROOMS[hood.id], hood.id).toBeUndefined();
+      expect(hood.streets.length).toBeGreaterThan(0);
+    }
   });
 });

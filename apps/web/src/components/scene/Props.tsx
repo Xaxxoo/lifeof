@@ -15,6 +15,7 @@ export function propLabelPos(p: Prop, style: DistrictStyle): [number, number, nu
   if (p.kind === "building") return [cx, Math.min(buildingHeight(p, style), 4.6) + 0.5, p.y + p.h - 0.4];
   if (p.kind === "bridgegate" || p.kind === "bridgestairs") return [cx, 3.2, p.y + p.h / 2];
   if (p.kind === "statue") return [cx, 2.2, p.y + p.h / 2];
+  if (p.kind === "vacantlot") return [cx, 2.3, p.y + p.h - 0.4];
   if (p.kind === "lawn" || p.kind === "dancefloor" || p.kind === "track" || p.kind === "drumcircle") return [cx, 0.6, p.y + p.h / 2];
   if (p.kind === "court") return [cx, 2.9, p.y + p.h / 2];
   if (p.kind === "counter" || p.kind === "djbooth") return [cx, 1.6, p.y + p.h / 2];
@@ -57,6 +58,7 @@ function PropMesh({ prop: p, night, style }: { prop: Prop; night: boolean; style
     case "bridgetower":
     case "rail":
     case "newsstand":
+    case "vacantlot":
       return <DowntownProp prop={p} night={night} />;
     case "vipbooth":
     case "speaker":

@@ -15,7 +15,9 @@ export type PropKind =
   // Downtown and the bridge
   | "statue" | "bridgestairs" | "bridgegate" | "bridgetower" | "rail" | "newsstand"
   // Clubs
-  | "vipbooth" | "speaker" | "photobooth" | "restroom" | "rope";
+  | "vipbooth" | "speaker" | "photobooth" | "restroom" | "rope"
+  // Player-built blocks
+  | "vacantlot";
 
 /** Tags let gigs pick sensible stops: pick up food at "food", drop off at "residential". */
 export type PropTag = "food" | "residential" | "outdoor" | "business" | "vendor";
@@ -120,7 +122,7 @@ const look = (skin: string, hair: Look["hair"], shirt: string, pants = "#26324a"
 });
 
 // ── Street block builder ────────────────────────────────────────────────────
-interface BuildingSpec {
+export interface BuildingSpec {
   id: string;
   label: string;
   w: number;
@@ -132,9 +134,11 @@ interface BuildingSpec {
   /** Gives the shop a walk-in interior where its actions happen. */
   inside?: ShopKind;
   arch?: Architecture;
+  /** An empty lot for sale, not a building. */
+  vacant?: boolean;
 }
 
-type ShopKind = "food" | "market" | "hall" | "barber" | "salon" | "laundry" | "gym" | "records" | "gallery" | "library" | "church" | "theater" | "tattoo" | "temple";
+export type ShopKind = "food" | "market" | "hall" | "barber" | "salon" | "laundry" | "gym" | "records" | "gallery" | "library" | "church" | "theater" | "tattoo" | "temple";
 
 const SHOP_THEME: Record<ShopKind, NonNullable<RoomDef["theme"]>> = {
   food: { floor: "#c9a27a", floorAlt: "#c09a72", wall: "#f2e6d0", light: "#ffcf7a" },
@@ -237,22 +241,26 @@ const SUBWAY = { x: 14, y: 13, w: 2, h: 2 };
  * Every street block shares one layout: storefronts along the north (y 0–2), sidewalk (3–7), road (8–12),
  * far sidewalk (13–15) with the subway entrance in the corner.
  */
-function street(spec: {
-  id: string;
-  name: string;
-  neighborhood: string;
-  buildings: BuildingSpec[];
-  station: { name: string; lines: string[] };
-  extras?: Prop[];
-  npcs?: Npc[];
-  home?: { x: number; y: number };
-}): RoomDef {
+export function street(
+  spec: {
+    id: string;
+    name: string;
+    neighborhood: string;
+    buildings: BuildingSpec[];
+    station: { name: string; lines: string[] };
+    extras?: Prop[];
+    npcs?: Npc[];
+    home?: { x: number; y: number };
+  },
+  /** Where the block's shop interiors go: the launch list, or a player-built block's own. */
+  shops: RoomDef[] = SHOPS,
+): RoomDef {
   let x = 0;
   const props: Prop[] = spec.buildings.map((b) => {
-    const p: Prop = { id: b.id, kind: "building", x, y: 0, w: b.w, h: 3, label: b.label, color: b.color, actions: b.actions, enter: b.enter, tags: b.tags, open: b.open, arch: b.arch };
+    const p: Prop = { id: b.id, kind: b.vacant ? "vacantlot" : "building", x, y: 0, w: b.w, h: 3, label: b.label, color: b.color, actions: b.actions, enter: b.enter, tags: b.tags, open: b.open, arch: b.arch };
     if (b.inside) {
       const shop = shopInterior(spec.id, b, { x: x + Math.floor(b.w / 2), y: 3 });
-      SHOPS.push({ ...shop, neighborhood: spec.neighborhood });
+      shops.push({ ...shop, neighborhood: spec.neighborhood });
       p.actions = ["enter_venue"];
       p.enter = shop.id;
     }

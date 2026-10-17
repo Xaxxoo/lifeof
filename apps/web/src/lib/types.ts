@@ -287,3 +287,10 @@ export interface HuntResultEvent {
   cash?: number;
   stellar?: { asset: string; amount: string } | null;
 }
+
+/** Founded neighborhoods, the ones still out there to found, and what things cost. */
+export interface NeighborhoodsDoc {
+  blocks: import("@nyl/content").PlayerBlockDoc[];
+  foundable: { id: string; name: string; borough: string; streets: string[]; station: { name: string; lines: string[] }; pitch: string; founded: boolean }[];
+  prices: { found: number; lot: number; build: number; maxLots: number; ownerShare: number };
+}
